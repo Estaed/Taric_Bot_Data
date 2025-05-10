@@ -10,6 +10,18 @@ This file tracks all features you have completed (**Done**) and those still in p
 
 ## To Do
 
+0.  **Foundational Setup**
+    -   **Virtual Environment (venv) Management**
+        -   Phase 0 (Installation): Initial venv creation and activation.
+        -   Phase 1 (Data Collection): Add/verify data acquisition and processing libraries.
+        -   Phase 2 (Training): Add/verify ML/RL framework libraries (e.g., TensorFlow, PyTorch, RLlib).
+        -   Phase 3 (Testing & Feedback): Add/verify testing and visualization libraries.
+    -   **GitHub Repository Management**
+        -   Phase 0 (Installation): Initialize repository, setup .gitignore, main/develop branches.
+        -   Phase 1 (Data Collection): Create branches for data fetching/processing scripts, commit initial data structure.
+        -   Phase 2 (Training): Create branches for model development, training scripts, and experiment tracking.
+        -   Phase 3 (Testing & Feedback): Create branches for evaluation scripts, test cases, and feedback aggregation.
+
 1. **Project initialization:** Created repository and defined folder structure (`data/`, `models/`, `src/`, `notebooks/`).
 2. **Data fetching setup:** Implemented Riot API client to download match data for Taric games and saved raw JSON files under `data/raw/`.
 3. **Basic data-cleaning pipeline:** Wrote script `src/clean_data.py` to parse JSON, remove incomplete entries, and export cleaned CSVs to `data/cleaned/`.
