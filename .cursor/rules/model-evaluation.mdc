@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Model Evaluation and Deployment
+
+## Evaluation Metrics
+The evaluation suite in [src/train_rl.py](mdc:src/train_rl.py) tracks:
+- Win rate against different champions
+- Average KDA
+- Objective control rate
+- Team fight participation
+
+## Model Deployment
+The inference system is implemented in [src/infer.py](mdc:src/infer.py) and includes:
+
+### Action Selection
+- Mouse movement prediction
+- Click type selection
+- Ability timing
+- Target selection
+
+### Safety Checks
+- Maximum click rate limits
+- Ability cooldown checks
+- Target validation
+
+### Visualization
+- Mouse movement paths
+- Ability usage timing
+- Target selection reasoning
+
+## CLI Interface
+The command line interface in [src/cli.py](mdc:src/cli.py) provides:
+- Model loading and inference
+- Performance monitoring
+- Automated retraining
+- Logging and metrics collection
+

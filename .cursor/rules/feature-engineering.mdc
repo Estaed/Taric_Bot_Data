@@ -1,0 +1,33 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Feature Engineering Guide
+
+Feature engineering scripts are located in [src/features/](mdc:src/features) and generate the following metrics:
+
+## Combat Metrics
+- Heal/Shield Uptime (active duration ÷ game time)
+- Stun Rate (successful stuns ÷ attempts)
+- Aura Usage (time E-aura is active on allies)
+
+## Positioning Metrics
+- Distance to allies
+- Distance to enemies
+- Ward coverage
+
+## Game State Features
+- Gold difference
+- Level difference
+- Objective status
+- Team composition
+
+## Mechanical Actions
+- Mouse click patterns (right-click vs left-click)
+- Ability sequence timing
+- Auto-attack reset timing
+- Target selection patterns
+
+The processed features are exported to [data/features/taric_features.csv](mdc:data/features/taric_features.csv) for model training.
+

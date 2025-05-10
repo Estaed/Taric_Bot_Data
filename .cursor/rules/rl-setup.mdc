@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Reinforcement Learning Setup
+
+The RL environment is defined in [src/train_rl.py](mdc:src/train_rl.py) with the following components:
+
+## State Space
+- Screen coordinates
+- Mouse position
+- Ability cooldowns
+- Target information
+- Health/mana values
+
+## Action Space
+- Mouse movements (x, y coordinates)
+- Click types (right/left)
+- Ability casts (Q, W, E, R)
+- Item usage
+- Summoner spells
+
+## Reward Function
+The reward function is implemented in [src/train_rl.py](mdc:src/train_rl.py) and includes:
+
+### Combat Rewards
+- Takedowns (kills + assists)
+- Structures destroyed
+- Epic monster kills
+
+### Ability-Specific Rewards
+- E (Dazzle): Stuns and multi-champion stuns
+- W (Bastion): Damage prevention and shield success
+- Q (Starlight's Touch): Healing and auto-attack resets
+- R (Cosmic Radiance): Takedowns and damage prevention
+- Passive (Bravado): Magic damage and auto-attack efficiency
+
+### Positioning Rewards
+- Proper ability positioning
+- Ally range maintenance
+- Optimal stun positioning
+
+### Team Fight Rewards
+- Team fight participation
+- Ultimate timing
+- Multiple ability hits
+

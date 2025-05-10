@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+## Project Rules
+
+These replace old `.cursorrules`. Whenever you start a user command with **"okay super"**, Cursor will:
+
+1. Open `[prd.md](mdc:prd.md)`.
+2. Find the **## Done** section.
+3. Grab the summary of your most recently approved feature.
+4. If it's not already listed, append it to **## Done**.
+
+*(Fires only on prompts beginning with "okay super.")*
