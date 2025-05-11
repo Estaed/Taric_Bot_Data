@@ -9,8 +9,10 @@ This file tracks all features you have completed (**Done**) and those still in p
 0.  **Foundational Setup**
     -   **Virtual Environment (venv) Management**
         -   Phase 0 (Installation): Initial venv creation and activation.
+        -   Phase 1 (Data Collection): Add/verify data acquisition and processing libraries.
     -   **GitHub Repository Management**
         -   Phase 0 (Installation): Initialize repository, setup .gitignore, main/develop branches.
+        -   Phase 1 (Data Collection): Create branches for data fetching/processing scripts, commit initial data structure.
 
 1. **Project initialization:** Created repository and defined folder structure (`data/`, `models/`, `src/`, `notebooks/`).
 
@@ -29,21 +31,29 @@ This file tracks all features you have completed (**Done**) and those still in p
    - Targeting information for healing, shielding, and stunning
    - Reward signals to guide the learning process
 
+6. **Feature Engineering (Phase 1)**
+   - Implemented enhanced state representation with:
+     - Team composition information
+     - Lane matchup context
+     - Game phase awareness (early/mid/late game)
+     - Higher temporal resolution (15-second intervals)
+   - Added ability haste calculations for dynamic cooldowns
+   - Created critical decision scenarios for key moments
+   - Added reward signal components for future RL model training
+
 ---
 
 ## To Do
 
 0.  **Foundational Setup**
     -   **Virtual Environment (venv) Management**
-        -   Phase 1 (Data Collection): Add/verify data acquisition and processing libraries.
         -   Phase 2 (Training): Add/verify ML/RL framework libraries (e.g., TensorFlow, PyTorch, RLlib).
         -   Phase 3 (Testing & Feedback): Add/verify testing and visualization libraries.
     -   **GitHub Repository Management**
-        -   Phase 1 (Data Collection): Create branches for data fetching/processing scripts, commit initial data structure.
         -   Phase 2 (Training): Create branches for model development, training scripts, and experiment tracking.
         -   Phase 3 (Testing & Feedback): Create branches for evaluation scripts, test cases, and feedback aggregation.
 
-6. **Feature Engineering**
+6a. **Feature Engineering (Phase 2)**
    - Write scripts in `src/features/` to calculate:
     - **Combat Metrics:**
       - Heal/Shield Uptime (active duration ÷ game time)
@@ -57,7 +67,6 @@ This file tracks all features you have completed (**Done**) and those still in p
       - Gold difference
       - Level difference
       - Objective status
-      - Team composition
         - Vision control metrics (wards placed/cleared, areas revealed).
     - **Mechanical Actions:**
       - Mouse click patterns (right-click vs left-click)
@@ -68,7 +77,8 @@ This file tracks all features you have completed (**Done**) and those still in p
         - Camera control patterns (if applicable).
         - Detailed interaction timings (e.g., time between spell cast and follow-up action).
         - Explore features derived from computer vision (e.g., identifying specific visual cues).
-        - Develop features to represent ally and enemy intentions/likely actions based on their movement and state.
+        - Develop features to represent ally and enemy intentions/likely actions based on their movement and 
+        state.
    - Export to `data/features/taric_features.csv`
 
 7. **Reinforcement Learning Setup**
