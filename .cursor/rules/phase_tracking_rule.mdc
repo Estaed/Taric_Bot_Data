@@ -3,3 +3,28 @@ description:
 globs:
 alwaysApply: false
 ---
+# Phase Completion & DevOps Checklist
+
+This rule helps ensure that foundational DevOps tasks (virtual environment and GitHub setup) are addressed as project phases progress.
+
+**Trigger:** When the user indicates a project phase is complete or is about to start a new phase (e.g., "Finished Phase 1", "Moving to Phase 2", "okay super, completed setup for Phase 0").
+
+**Actions for the AI:**
+
+1.  **Identify Current/Completed Phase:**
+    *   Clarify with the user which phase (0: Installation, 1: Data Collection, 2: Training, 3: Test & Feedback) is being referred to.
+
+2.  **Verify `prd.md` for Phase-Specific DevOps Tasks:**
+    *   Refer to the "0. Foundational Setup" section in `[prd.md](mdc:prd.md)`.
+    *   For the identified phase, check if the corresponding sub-tasks under "Virtual Environment (venv) Management" and "GitHub Repository Management" have been:
+        *   Discussed for completion.
+        *   Marked as "Done" in `[prd.md](mdc:prd.md)` if the user confirms they are complete (potentially using the "okay super" flow described in `[prd.md](mdc:prd.md)`'s Project Rules).
+    *   **Example for Phase 1 (Data Collection):**
+        *   Ask/Verify: "Is the venv updated with data collection libraries?"
+        *   Ask/Verify: "Are GitHub branches for data scripts set up?"
+        *   If these are confirmed done, guide the user to update `[prd.md](mdc:prd.md)` or use "okay super" to move them to the "Done" section.
+
+3.  **Documentation Reminder:**
+    *   Remind the user that `[prd.md](mdc:prd.md)` should reflect the current status of these setup tasks.
+
+**Note:** This rule complements the "Project Rules" in `[prd.md](mdc:prd.md)`. The primary mechanism for moving any task (including these DevOps tasks) to the "Done" section of `[prd.md](mdc:prd.md)` is typically initiated by the user with a command like "okay super." This rule provides a structured way to remember to check on these specific foundational tasks during phase transitions.

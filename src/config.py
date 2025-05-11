@@ -17,7 +17,7 @@ MODELS_DIR = PROJECT_ROOT / "models"
 NOTEBOOKS_DIR = PROJECT_ROOT / "notebooks"
 
 # Data subdirectories
-RAW_DATA_DIR = DATA_DIR / "raw"
+RAW_DATA_DIR = DATA_DIR / "raw" / "Estaed games"
 CLEANED_DATA_DIR = DATA_DIR / "cleaned"
 FEATURES_DIR = DATA_DIR / "features"
 
