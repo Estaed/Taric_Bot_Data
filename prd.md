@@ -41,6 +41,52 @@ This file tracks all features you have completed (**Done**) and those still in p
    - Created critical decision scenarios for key moments
    - Added reward signal components for future RL model training
 
+6a. **Feature Engineering (Phase 1.5) - Partial**
+   - Optimized data storage structure:
+     - Moved static match data to file level instead of duplicating in every state-action pair
+     - Significantly reduced file sizes and improved processing efficiency
+   - Implemented select advanced metrics:
+     - **Combat Metrics:**
+       - Stun opportunity detection
+       - Healing target priority analysis
+       - Heal/Shield Uptime (active duration ÷ game time)
+       - Stun Rate (successful stuns ÷ attempts)
+       - Detailed healing efficiency metrics
+       - Damage prevented calculations
+       - Healing distribution by game phase
+       - Target priority analysis
+     - **Positioning Metrics:**
+       - Distance to allies
+       - Distance to enemies
+       - Region-based movement analysis
+       - Lane proximity tracking over time
+       - Champion pathing and movement efficiency metrics
+       - Map region presence analysis
+     - **Game State Features:**
+       - Gold difference tracking
+       - Level difference tracking
+       - Basic objective control tracking
+       - Event tracking for key game moments
+     - **Mechanical Actions:**
+       - Ability sequence timing
+       - Target selection patterns
+       - Detailed interaction timing analysis
+       - Item active usage in relation to ability casts
+       - Mouse click patterns (right-click vs left-click)
+       - Auto-attack reset timing
+       - Actions Per Minute (APM) and variation
+       - Camera control patterns
+     - **Vision Metrics:**
+       - Ward coverage with region tracking
+       - Vision control metrics by map region
+       - Comprehensive objective control tracking
+       - Vision control metrics (wards placed/cleared, areas revealed)
+       - Vision advantage/disadvantage period analysis
+   - Created file organization structure:
+     - Organized files into appropriate subdirectories
+     - Implemented backup functionality
+     - Added automatic file organization during extraction
+
 ---
 
 ## To Do
@@ -53,33 +99,36 @@ This file tracks all features you have completed (**Done**) and those still in p
         -   Phase 2 (Training): Create branches for model development, training scripts, and experiment tracking.
         -   Phase 3 (Testing & Feedback): Create branches for evaluation scripts, test cases, and feedback aggregation.
 
-6a. **Feature Engineering (Phase 2)**
-   - Write scripts in `src/features/` to calculate:
-    - **Combat Metrics:**
-      - Heal/Shield Uptime (active duration ÷ game time)
-      - Stun Rate (successful stuns ÷ attempts)
-    - **Positioning Metrics:**
-      - Distance to allies
-      - Distance to enemies
-      - Ward coverage
-        - Champion pathing and movement efficiency metrics.
-    - **Game State Features:**
-      - Gold difference
-      - Level difference
-      - Objective status
-        - Vision control metrics (wards placed/cleared, areas revealed).
-    - **Mechanical Actions:**
-      - Mouse click patterns (right-click vs left-click)
-      - Ability sequence timing
-      - Auto-attack reset timing
-      - Target selection patterns
-        - Actions Per Minute (APM) and variation.
-        - Camera control patterns (if applicable).
-        - Detailed interaction timings (e.g., time between spell cast and follow-up action).
-        - Explore features derived from computer vision (e.g., identifying specific visual cues).
-        - Develop features to represent ally and enemy intentions/likely actions based on their movement and 
-        state.
-   - Export to `data/features/taric_features.csv`
+6b. **League Director Integration (Phase 1.5)**
+   - Setup and configure League Director for replay analysis:
+     - Install League Director from https://github.com/riotgames/leaguedirector
+     - Configure game.cfg with EnableReplayApi=1
+     - Set graphics settings to Very High for full feature access
+   - Implement visual data extraction scripts:
+     - **Precise Positioning Data:**
+       - Track exact mouse movement patterns during combos
+       - Record camera positioning during key gameplay moments
+       - Extract visual cues that trigger decision-making
+     - **Sequence Analysis:**
+       - Record optimal Taric ability combos as training examples  
+       - Measure precise timing between actions at frame level
+       - Save and categorize sequences for model training
+     - **First-Person Perspective Analysis:**
+       - Capture champion's viewpoint during decision-making
+       - Analyze vision limitations and their impact on gameplay
+       - Record eye tracking approximation (what's visible on screen)
+     - **Detailed Mechanical Analysis:**
+       - Slow-motion analysis of skill shots and dodging
+       - Multi-angle study of team fight positioning
+       - Track cursor movement during targeting and ability execution
+   - Develop data processing pipeline:
+     - Create a standardized format for visual data
+     - Integrate with existing feature datasets
+     - Export processed visual data to `data/cleaned/taric_visual_features.csv`
+   - Implement replay management system:
+     - Catalog and organize replay files
+     - Tag replays with relevant metadata (matchup, performance, etc.)
+     - Create a retrieval system for finding specific gameplay scenarios
 
 7. **Reinforcement Learning Setup**
    - Implement environment wrapper for League of Legends

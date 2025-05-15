@@ -16,9 +16,32 @@ from datetime import datetime, timedelta
 import sys
 
 # Add the project root to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from src.config import RAW_DATA_DIR, CLEANED_DATA_DIR, FEATURES_DIR
+
+# Import enhanced data extraction capabilities
+from src.frame_analysis.enhanced_data_extraction import extract_enhanced_data
+
+# Import scenario templates 
+try:
+    from src.frame_analysis.taric_scenarios import (
+        ABILITY_SCENARIOS,
+        POSITIONING_SCENARIOS,
+        COMBAT_SCENARIOS,
+        ITEM_USAGE_SCENARIOS,
+        WAVE_MANAGEMENT_SCENARIOS,
+        VISION_CONTROL_SCENARIOS,
+        MACRO_DECISION_SCENARIOS,
+        TEAM_COORDINATION_SCENARIOS,
+        GAME_PHASE_SCENARIOS,
+        SPECIAL_MECHANICS_SCENARIOS
+    )
+    USING_COMPREHENSIVE_SCENARIOS = True
+except ImportError:
+    USING_COMPREHENSIVE_SCENARIOS = False
 
 # Custom JSON encoder to handle special values
 class TaricJSONEncoder(json.JSONEncoder):
@@ -320,6 +343,7 @@ class FrameAnalyzer:
     def fetch_timeline(self):
         """
         Simulates timeline data focused on Taric's actions and events.
+        Now generates data at 1-second intervals for more detailed analysis.
         
         Returns:
             bool: True if successful, False otherwise
@@ -329,9 +353,9 @@ class FrameAnalyzer:
             return False
         
         try:
-            # Create simulated timeline frames with higher temporal resolution (15 seconds)
+            # Create simulated timeline frames with high temporal resolution (1 second)
             game_duration = self.match_data['info']['gameDuration']
-            frame_count = max(4, game_duration // 15)  # One frame every 15 seconds
+            frame_count = max(60, game_duration)  # One frame every second, with minimum of 60 frames
             
             # Get Taric data from match
             taric_participant = None
@@ -351,8 +375,8 @@ class FrameAnalyzer:
             
             frames = []
             for frame_idx in range(frame_count + 1):
-                # Calculate timestamp
-                timestamp = frame_idx * 15 * 1000  # 15 seconds in milliseconds
+                # Calculate timestamp (1 second in milliseconds)
+                timestamp = frame_idx * 1000  # 1 second in milliseconds
                 
                 # Create frame data
                 frame = {
@@ -441,30 +465,33 @@ class FrameAnalyzer:
                     }
                 
                 # Generate Taric-focused events for this frame
+                # Only add events in certain frames to simulate realistic gameplay
                 if frame_idx > 0:
-                    # Number of events depends on game phase
-                    # Early game (0-10 min): fewer events
-                    # Mid game (10-25 min): moderate events
-                    # Late game (25+ min): more events
+                    # Adjust event density based on game phase
                     game_minute = timestamp / 60000
                     
+                    # Calculate event probability based on game phase
+                    # Early game: fewer events
+                    # Mid/late game: more events during intense moments
                     if game_minute < 10:
-                        # Early game: 1-3 events per 15 seconds
-                        num_events = np.random.randint(1, 4)
+                        # Early game: ~5-10% chance of event per second
+                        event_probability = 0.05 + (game_minute / 10) * 0.05
                     elif game_minute < 25:
-                        # Mid game: 2-4 events per 15 seconds
-                        num_events = np.random.randint(2, 5)
+                        # Mid game: ~10-20% chance of event per second
+                        event_probability = 0.10 + ((game_minute - 10) / 15) * 0.10
                     else:
-                        # Late game: 3-6 events per 15 seconds
-                        num_events = np.random.randint(3, 7)
-                    
-                    for _ in range(num_events):
-                        # Random timestamp within this frame's 15 second window
-                        prev_timestamp = (frame_idx - 1) * 15 * 1000
-                        event_timestamp = prev_timestamp + np.random.randint(0, 15 * 1000)
+                        # Late game: ~20-30% chance of event per second
+                        event_probability = 0.20 + min(0.10, ((game_minute - 25) / 15) * 0.10)
                         
-                        # Generate events similar to the existing code, but with more variety
-                        # and team composition awareness
+                    # During high-intensity moments, increase probability
+                    # We'll approximate this by adding random spikes
+                    if np.random.random() < 0.05:  # 5% chance of high-intensity moment
+                        event_probability *= 2
+                        
+                    # Decide if we should generate an event for this frame
+                    if np.random.random() < event_probability:
+                        # Random timestamp within this 1-second window
+                        event_timestamp = timestamp - np.random.randint(0, 1000)  # Up to 1 second back
                         
                         # Determine event type with weighted probabilities based on game phase
                         event_types = []
@@ -670,7 +697,7 @@ class FrameAnalyzer:
             self.timeline_data = {
                 'metadata': self.match_data['metadata'],
                 'info': {
-                    'frameInterval': 15000,  # 15 seconds in milliseconds
+                    'frameInterval': 1000,  # 1 second in milliseconds
                     'frames': frames
                 }
             }
@@ -761,20 +788,33 @@ class FrameAnalyzer:
         # Get all Taric-related events
         taric_events = self.extract_taric_events()
         
+        # Create a dictionary to track which frames have explicit actions
+        frames_with_actions = {}
+        
+        # Keep track of previous states and actions for context
+        previous_states = []
+        previous_actions = []
+        
+        # First pass - create state-action pairs for explicit actions
         for event in taric_events:
             # Get the frame closest to this event
             event_time = event.get('timestamp', 0)
             closest_frame = None
             min_time_diff = float('inf')
+            closest_frame_idx = -1
             
-            for frame in self.frames:
+            for i, frame in enumerate(self.frames):
                 time_diff = abs(frame.get('timestamp', 0) - event_time)
                 if time_diff < min_time_diff:
                     min_time_diff = time_diff
                     closest_frame = frame
+                    closest_frame_idx = i
             
             if not closest_frame:
                 continue
+            
+            # Mark this frame as having an action
+            frames_with_actions[closest_frame_idx] = True
             
             # Create game state at this moment
             game_state = self._create_game_state(closest_frame, event_time)
@@ -782,14 +822,78 @@ class FrameAnalyzer:
             # Get the action from the event
             action = self._create_action(event)
             
-            # Create state-action pair
+            # Add enhanced data extraction
             if game_state and action:
-                state_action_pairs.append({
+                # Add enhanced data to the game state
+                enhanced_data = extract_enhanced_data(
+                    game_state, 
+                    event_time, 
+                    action, 
+                    previous_states, 
+                    previous_actions,
+                    self  # Pass self as analyzer
+                )
+                
+                game_state['enhanced_data'] = enhanced_data
+                
+                # Create state-action pair
+                state_action_pair = {
                     'state': game_state,
                     'action': action,
                     'timestamp': event_time,
                     'event_type': event.get('type')
-                })
+                }
+                
+                # Add to lists
+                state_action_pairs.append(state_action_pair)
+                previous_states.append(game_state)
+                previous_actions.append(action)
+        
+        # Second pass - add NO_ACTION for frames without explicit actions
+        for i, frame in enumerate(self.frames):
+            # Skip frames that already have actions
+            if i in frames_with_actions:
+                continue
+                
+            timestamp = frame.get('timestamp', 0)
+            
+            # Create game state
+            game_state = self._create_game_state(frame, timestamp)
+            
+            # Create a NO_ACTION action
+            action = {
+                'type': 'NO_ACTION',
+                'timestamp': timestamp,
+                'description': 'No explicit action detected in this frame'
+            }
+            
+            # Add to state-action pairs
+            if game_state:
+                # Add enhanced data to the game state
+                enhanced_data = extract_enhanced_data(
+                    game_state, 
+                    timestamp, 
+                    action, 
+                    previous_states, 
+                    previous_actions,
+                    self  # Pass self as analyzer
+                )
+                
+                game_state['enhanced_data'] = enhanced_data
+                
+                state_action_pair = {
+                    'state': game_state,
+                    'action': action,
+                    'timestamp': timestamp,
+                    'event_type': 'NO_ACTION'
+                }
+                
+                state_action_pairs.append(state_action_pair)
+                previous_states.append(game_state)
+                previous_actions.append(action)
+        
+        # Sort state-action pairs by timestamp
+        state_action_pairs.sort(key=lambda x: x['timestamp'])
         
         self.state_action_pairs = state_action_pairs
         return state_action_pairs
@@ -833,6 +937,7 @@ class FrameAnalyzer:
                 game_phase = "LATE_GAME"
             
             # Create overall game state focused on Taric with enhanced information
+            # Removed static match data (team_composition, enemy_composition, lane_matchup, game_context)
             game_state = {
                 'timestamp': timestamp,
                 'game_time_seconds': timestamp / 1000,  # seconds
@@ -854,12 +959,6 @@ class FrameAnalyzer:
                 },
                 'nearby_units': nearby_units,
                 'targeting': targeting,
-                # Include team composition information
-                'team_composition': self.team_composition,
-                'enemy_composition': self.enemy_composition,
-                'lane_matchup': self.lane_matchup,
-                # Include game context
-                'game_context': self.game_context,
                 # Only include Taric's relevant events
                 'game_events': [
                     e for e in frame.get('events', []) 
@@ -1321,13 +1420,20 @@ class FrameAnalyzer:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_file = output_dir / f"taric_sa_pairs_{match_id}_{timestamp}.json"
             
-            # Create a custom JSON serializable data structure
+            # Create a custom JSON serializable data structure with static match data separated
             output_data = {
                 'metadata': {
                     'match_id': self.match_data['metadata']['matchId'],
                     'game_version': self.match_data['info']['gameVersion'],
                     'taric_participant_id': self.taric_participant_id,
                     'pairs_count': len(self.state_action_pairs)
+                },
+                # Add static match data at the top level - only stored once
+                'match_data': {
+                    'team_composition': self.team_composition,
+                    'enemy_composition': self.enemy_composition,
+                    'lane_matchup': self.lane_matchup,
+                    'game_context': self.game_context
                 },
                 'state_action_pairs': self._prepare_json_serializable(self.state_action_pairs)
             }
@@ -1648,7 +1754,311 @@ class FrameAnalyzer:
         
         critical_scenarios.extend(stun_scenarios)
         
+        # 3. Add comprehensive scenarios from taric_scenarios.py if available
+        if USING_COMPREHENSIVE_SCENARIOS:
+            comprehensive_scenarios = self._create_comprehensive_scenarios()
+            if comprehensive_scenarios:
+                critical_scenarios.extend(comprehensive_scenarios)
+                print(f"  Added {len(comprehensive_scenarios)} comprehensive scenarios")
+        
         return critical_scenarios
+
+    def _create_comprehensive_scenarios(self):
+        """
+        Generate all scenario types from the comprehensive scenario templates.
+        
+        Returns:
+            list: All generated scenario instances
+        """
+        if not USING_COMPREHENSIVE_SCENARIOS:
+            return []
+            
+        all_scenarios = []
+        
+        # Process Q scenarios
+        for q_scenario_template in ABILITY_SCENARIOS["Q_SCENARIOS"]:
+            # Generate 2-4 variations of each scenario
+            for _ in range(np.random.randint(2, 5)):
+                scenario = self._generate_scenario_from_template(
+                    q_scenario_template, "Q_ABILITY"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process W scenarios
+        for w_scenario_template in ABILITY_SCENARIOS["W_SCENARIOS"]:
+            for _ in range(np.random.randint(2, 5)):
+                scenario = self._generate_scenario_from_template(
+                    w_scenario_template, "W_ABILITY"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process E scenarios
+        for e_scenario_template in ABILITY_SCENARIOS["E_SCENARIOS"]:
+            for _ in range(np.random.randint(2, 5)):
+                scenario = self._generate_scenario_from_template(
+                    e_scenario_template, "E_ABILITY"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process R scenarios
+        for r_scenario_template in ABILITY_SCENARIOS["R_SCENARIOS"]:
+            for _ in range(np.random.randint(2, 5)):
+                scenario = self._generate_scenario_from_template(
+                    r_scenario_template, "R_ABILITY"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process positioning scenarios
+        for pos_template in POSITIONING_SCENARIOS:
+            for _ in range(np.random.randint(2, 4)):
+                scenario = self._generate_scenario_from_template(
+                    pos_template, "POSITIONING"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process combat scenarios
+        for combat_template in COMBAT_SCENARIOS:
+            for _ in range(np.random.randint(2, 4)):
+                scenario = self._generate_scenario_from_template(
+                    combat_template, "COMBAT"
+                )
+                if scenario:
+                    all_scenarios.append(scenario)
+        
+        # Process the remaining scenario categories
+        scenario_groups = [
+            (ITEM_USAGE_SCENARIOS, "ITEM_USAGE", 2, 3),
+            (WAVE_MANAGEMENT_SCENARIOS, "WAVE_MANAGEMENT", 1, 3),
+            (VISION_CONTROL_SCENARIOS, "VISION_CONTROL", 2, 3),
+            (MACRO_DECISION_SCENARIOS, "MACRO_DECISION", 2, 3),
+            (TEAM_COORDINATION_SCENARIOS, "TEAM_COORDINATION", 2, 3),
+            (SPECIAL_MECHANICS_SCENARIOS, "SPECIAL_MECHANICS", 2, 4)
+        ]
+        
+        for scenarios, category, min_var, max_var in scenario_groups:
+            for template in scenarios:
+                for _ in range(np.random.randint(min_var, max_var + 1)):
+                    scenario = self._generate_scenario_from_template(
+                        template, category
+                    )
+                    if scenario:
+                        all_scenarios.append(scenario)
+        
+        # Process game phase scenarios
+        for phase, templates in GAME_PHASE_SCENARIOS.items():
+            for template in templates:
+                for _ in range(np.random.randint(1, 4)):
+                    scenario = self._generate_scenario_from_template(
+                        template, f"GAME_PHASE_{phase}"
+                    )
+                    if scenario:
+                        all_scenarios.append(scenario)
+        
+        return all_scenarios
+        
+    def _generate_scenario_from_template(self, template, category):
+        """
+        Generate a concrete scenario instance from a template.
+        
+        Args:
+            template (dict): The scenario template
+            category (str): The scenario category
+            
+        Returns:
+            dict: A concrete scenario instance or None if generation failed
+        """
+        try:
+            # Get game data
+            game_duration = self.match_data['info']['gameDuration']
+            
+            # Calculate timestamp within the game time range
+            min_time, max_time = template.get("game_time_range", (0.0, 1.0))
+            scenario_time_percent = min_time + np.random.random() * (max_time - min_time)
+            timestamp = int(game_duration * 1000 * scenario_time_percent)
+            
+            # Find nearest frame
+            nearest_frame = None
+            min_time_diff = float('inf')
+            
+            for frame in self.frames:
+                time_diff = abs(frame.get('timestamp', 0) - timestamp)
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    nearest_frame = frame
+            
+            if not nearest_frame:
+                return None
+            
+            # Create base game state
+            game_state = self._create_game_state(nearest_frame, timestamp)
+            if not game_state:
+                return None
+            
+            # Modify game state to match scenario requirements
+            self._modify_game_state_for_scenario(game_state, template)
+            
+            # Create action
+            action = {
+                "type": "CRITICAL_DECISION",
+                "name": template["name"],
+                "description": template["description"],
+                "timestamp": timestamp,
+                "correct_action": template["correct_action"],
+                "scenario_category": category
+            }
+            
+            # Add ability-specific action data
+            if category == "Q_ABILITY" and template["correct_action"] == "USE_Q":
+                action["ability"] = "Q"
+                action["targets"] = [self.taric_participant_id]  # Self
+                # Add random allies as targets
+                if "ally_count" in template:
+                    min_allies, max_allies = template["ally_count"]
+                    num_allies = min(max_allies, np.random.randint(min_allies, max_allies + 1))
+                    for _ in range(num_allies):
+                        action["targets"].append(np.random.randint(1, 5))  # Random ally IDs
+            
+            elif category == "W_ABILITY" and "USE_W" in template["correct_action"]:
+                action["ability"] = "W"
+                if "ally_role" in template:
+                    action["target_role"] = template["ally_role"]
+                    action["target_id"] = np.random.randint(1, 5)  # Random ally ID
+            
+            elif category == "E_ABILITY" and "USE_E" in template["correct_action"]:
+                action["ability"] = "E"
+                # Add stun direction
+                action["stun_direction_x"] = np.random.random() * 2 - 1
+                action["stun_direction_y"] = np.random.random() * 2 - 1
+                # Normalize
+                magnitude = np.sqrt(action["stun_direction_x"]**2 + action["stun_direction_y"]**2)
+                if magnitude > 0:
+                    action["stun_direction_x"] /= magnitude
+                    action["stun_direction_y"] /= magnitude
+                
+                # Add targets that would be hit
+                if "enemy_count" in template:
+                    min_enemies, max_enemies = template["enemy_count"]
+                    num_enemies = min(max_enemies, np.random.randint(min_enemies, max_enemies + 1))
+                    action["stunned_targets"] = [np.random.randint(6, 11) for _ in range(num_enemies)]
+            
+            elif category == "R_ABILITY" and "USE_R" in template["correct_action"]:
+                action["ability"] = "R"
+                # Include allies affected by ultimate
+                action["affected_allies"] = [self.taric_participant_id]  # Taric always affected
+                if "ally_count" in template:
+                    min_allies, max_allies = template["ally_count"]
+                    num_allies = min(max_allies, np.random.randint(min_allies, max_allies + 1))
+                    for _ in range(num_allies):
+                        action["affected_allies"].append(np.random.randint(1, 5))  # Random ally ID
+            
+            # Return the scenario
+            return {
+                "state": game_state,
+                "action": action,
+                "timestamp": timestamp,
+                "event_type": "CRITICAL_DECISION",
+                "scenario_type": category
+            }
+            
+        except Exception as e:
+            print(f"Error generating scenario from template: {e}")
+            return None
+    
+    def _modify_game_state_for_scenario(self, game_state, template):
+        """
+        Modify a game state to match the scenario requirements.
+        
+        Args:
+            game_state (dict): The game state to modify
+            template (dict): The scenario template
+        """
+        # Modify ally health if specified
+        if "ally_health_range" in template:
+            min_health, max_health = template["ally_health_range"]
+            allies = game_state["nearby_units"]["allies"]
+            for ally in allies:
+                ally["health_percent"] = min_health + np.random.random() * (max_health - min_health)
+                ally["is_in_danger"] = ally["health_percent"] < 0.4
+        
+        # Modify enemy health if specified
+        if "enemy_health_range" in template:
+            min_health, max_health = template["enemy_health_range"]
+            enemies = game_state["nearby_units"]["enemies"]
+            for enemy in enemies:
+                enemy["health_percent"] = min_health + np.random.random() * (max_health - min_health)
+                enemy["is_killable"] = enemy["health_percent"] < 0.2
+        
+        # Modify ally count if specified
+        if "ally_count" in template:
+            min_allies, max_allies = template["ally_count"]
+            ally_count = np.random.randint(min_allies, max_allies + 1)
+            allies = game_state["nearby_units"]["allies"]
+            
+            # Adjust ally list size
+            while len(allies) > ally_count and allies:
+                allies.pop()
+            
+            # Add allies if needed
+            while len(allies) < ally_count:
+                allies.append({
+                    "distance": np.random.randint(200, 800),
+                    "health_percent": np.random.random(),
+                    "is_in_q_range": np.random.random() > 0.3,
+                    "is_in_w_range": np.random.random() > 0.4,
+                    "is_in_e_range": np.random.random() > 0.5,
+                    "is_in_r_range": np.random.random() > 0.3,
+                    "is_in_danger": np.random.random() < 0.3
+                })
+            
+            game_state["nearby_units"]["ally_count"] = len(allies)
+        
+        # Modify enemy count if specified
+        if "enemy_count" in template:
+            min_enemies, max_enemies = template["enemy_count"]
+            enemy_count = np.random.randint(min_enemies, max_enemies + 1)
+            enemies = game_state["nearby_units"]["enemies"]
+            
+            # Adjust enemy list size
+            while len(enemies) > enemy_count and enemies:
+                enemies.pop()
+            
+            # Add enemies if needed
+            while len(enemies) < enemy_count:
+                enemies.append({
+                    "distance": np.random.randint(300, 1000),
+                    "health_percent": np.random.random(),
+                    "is_in_basic_attack_range": np.random.random() > 0.7,
+                    "is_in_e_range": np.random.random() > 0.5,
+                    "is_stunnable": np.random.random() > 0.3,
+                    "is_killable": np.random.random() < 0.2
+                })
+            
+            game_state["nearby_units"]["enemy_count"] = len(enemies)
+        
+        # Add any other template-specific modifications
+        if "mana_percent" in template:
+            min_mana, max_mana = template["mana_percent"]
+            game_state["taric_state"]["mana_percent"] = min_mana + np.random.random() * (max_mana - min_mana)
+        
+        if "flash_available" in template:
+            game_state["taric_state"]["cooldowns"]["SUMMONER1"] = 0 if template["flash_available"] else 300
+        
+        # Flag-based properties
+        for flag_prop in [
+            "team_invading", "enemy_cc_duration", "at_major_objective", 
+            "objective_spawning_soon", "team_ready_to_fight", "allies_engaging",
+            "ultimate_available", "passive_charged", "team_fight_imminent",
+            "at_major_objective", "need_vision", "lane_phase"
+        ]:
+            if flag_prop in template:
+                game_state.setdefault("scenario_flags", {})[flag_prop] = template[flag_prop]
+                
+        return game_state
 
 def process_all_matches():
     """

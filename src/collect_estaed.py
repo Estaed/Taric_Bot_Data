@@ -11,6 +11,15 @@ import urllib.parse
 import time
 from pathlib import Path
 from datetime import datetime
+import dotenv
+
+# Add the project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Import from config to get API key
+from src.config import RIOT_API_KEY, RAW_DATA_DIR
 
 # Create data directories if they don't exist
 data_dir = Path("data/raw")
@@ -128,11 +137,17 @@ def is_taric_game(match_data, puuid):
 
 def collect_estaed_data():
     """Collect 100 Taric games from Estaed accounts."""
-    # Ask for API key
-    print("\nIMPORTANT: You need a valid Development or Personal Riot API key (not Production).")
-    print("Get your API key from: https://developer.riotgames.com/")
-    print("NOTE: Development API keys expire in 24 hours.")
-    api_key = input("Enter your Riot API key: ")
+    # Get API key from config, which loads it from .env
+    api_key = RIOT_API_KEY
+    
+    if not api_key:
+        print("\nRIOT_API_KEY not found in .env file or environment variables.")
+        print("Please create or update your .env file with your Riot API key.")
+        print("You can get your API key from: https://developer.riotgames.com/")
+        print("NOTE: Development API keys expire in 24 hours.")
+        
+        # Fallback to manual input if needed
+        api_key = input("Enter your Riot API key manually: ")
     
     if not api_key:
         print("No API key provided. Cannot collect data.")
