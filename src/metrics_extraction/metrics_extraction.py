@@ -101,9 +101,6 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
                 except Exception as e:
                     logger.warning(f"Error loading raw match data: {e}")
         
-        # Add start time for processing
-        start_time = time.time()
-        
         # Calculate all metrics
         logger.info("Calculating combat metrics...")
         combat_metrics = calculate_combat_metrics(state_action_pairs, match_data)
@@ -131,31 +128,10 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
         logger.info("Calculating game state metrics...")
         game_state_metrics = calculate_game_state_metrics(state_action_pairs, match_data)
         
-        # Add end time and calculate duration
-        end_time = time.time()
-        processing_duration = end_time - start_time
-        
-        # Add processing metadata
-        processing_metadata = {
-            "processing_start_time": datetime.fromtimestamp(start_time).isoformat(),
-            "processing_end_time": datetime.fromtimestamp(end_time).isoformat(),
-            "processing_duration_seconds": processing_duration,
-            "metrics_modules": [
-                "combat_metrics",
-                "vision_metrics",
-                "positioning_metrics",
-                "mechanics_metrics",
-                "game_state_metrics"
-            ]
-        }
-        
         # Combine all metrics
         all_metrics = {
             'match_id': match_id or 'unknown',
-            'metadata': {
-                **metadata,
-                'processing': processing_metadata
-            },
+            'metadata': metadata,
             'features': {
                 'combat': combat_metrics,
                 'vision': vision_metrics,
@@ -702,12 +678,17 @@ def extract_metrics_to_file(file_path, output_dir, validate_zeros=True, output_f
         if not metrics:
             return False
         
-        # Create output filename
-        match_id = metrics.get('match_id', 'unknown')
-        format_suffix = "per_second" if output_format == "per_second" else "summary"
-        output_file = os.path.join(output_dir, f"taric_metrics_{match_id}_{format_suffix}.json")
+        # Use the original filename to create a unique metrics filename
+        original_filename = os.path.basename(file_path)
+        # Replace the prefix with 'metrics' instead of 'sa_pairs'
+        output_filename = original_filename.replace('taric_sa_pairs_', 'taric_metrics_')
+        
+        # Remove processing metadata as it's not useful
+        if 'metadata' in metrics and 'processing' in metrics['metadata']:
+            del metrics['metadata']['processing']
         
         # Save metrics to file
+        output_file = os.path.join(output_dir, output_filename)
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(metrics, f, indent=2)
         
@@ -718,7 +699,7 @@ def extract_metrics_to_file(file_path, output_dir, validate_zeros=True, output_f
         logger.error(f"Error saving metrics from {file_path}: {str(e)}")
         return False
 
-def process_all_files(input_dir, output_dir, batch_size=5, organize_files=True, validate_zeros=True, output_format="summary"):
+def process_all_files(input_dir, output_dir, batch_size=5, organize_files=False, validate_zeros=True, output_format="summary"):
     """
     Process all state-action pair files in the input directory.
     
@@ -755,36 +736,26 @@ def process_all_files(input_dir, output_dir, batch_size=5, organize_files=True, 
     total_processed = 0
     total_success = 0
     
-    # Create subdirectory for this format if needed
-    format_dir = os.path.join(output_dir, output_format)
-    os.makedirs(format_dir, exist_ok=True)
-    
     for i in range(0, len(sa_files), batch_size):
         batch_files = sa_files[i:i+batch_size]
         logger.info(f"Processing batch {i//batch_size + 1}/{(len(sa_files)-1)//batch_size + 1}")
         
         for file_path in tqdm(batch_files, desc=f"Batch {i//batch_size + 1}"):
             total_processed += 1
-            success = extract_metrics_to_file(file_path, format_dir, validate_zeros, output_format)
+            success = extract_metrics_to_file(file_path, output_dir, validate_zeros, output_format)
             if success:
                 total_success += 1
     
-    # Organize output files if requested
-    if organize_files and total_success > 0:
-        logger.info("Organizing extracted metric files...")
-        organize_metric_files(format_dir)
+    # We're skipping organizing files and summary generation as per user request
     
     success_rate = (total_success / total_processed * 100) if total_processed > 0 else 0
     logger.info(f"Processed {total_processed} files with {total_success} successes ({success_rate:.1f}%)")
-    
-    # Generate summary report
-    summary = generate_summary_report(format_dir)
     
     return {
         "total_files": total_processed,
         "successful_files": total_success,
         "failed_files": total_processed - total_success,
-        "summary": summary
+        "summary": None
     }
 
 def generate_summary_report(output_dir):
@@ -900,7 +871,7 @@ def main():
     parser.add_argument('--input', default=STATE_ACTION_DIR, help='Directory containing state-action pair files')
     parser.add_argument('--output', default=METRICS_DIR, help='Directory to save extracted metrics files')
     parser.add_argument('--batch-size', type=int, default=5, help='Number of files to process in each batch')
-    parser.add_argument('--no-organize', action='store_true', help='Skip organizing output files')
+    parser.add_argument('--no-organize', action='store_true', default=True, help='Skip organizing output files')
     parser.add_argument('--no-validation', action='store_true', help='Skip validating metrics for zero values')
     parser.add_argument('--summary-only', action='store_true', help='Only generate summary without reprocessing files')
     parser.add_argument('--format', choices=['summary', 'per_second'], default='summary', 
@@ -921,7 +892,7 @@ def main():
             args.input, 
             args.output,
             batch_size=args.batch_size,
-            organize_files=not args.no_organize,
+            organize_files=False,  # Always skip organizing
             validate_zeros=not args.no_validation,
             output_format=args.format
         )
