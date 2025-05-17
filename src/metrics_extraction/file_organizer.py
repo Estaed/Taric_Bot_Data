@@ -37,7 +37,7 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
     
     # Ensure Path objects
     input_dir = Path(input_dir)
-    output_dir = Path(output_dir)
+        output_dir = Path(output_dir)
     
     # Find all state-action pair files
     sa_files = list(input_dir.glob("**/taric_sa_pairs_*.json"))
@@ -59,7 +59,7 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
         if by_date:
             file_time = datetime.fromtimestamp(file_path.stat().st_mtime)
             date_str = file_time.strftime("%Y-%m-%d")
-        
+            
         # Extract match ID from filename
         match_id = None
         if by_match_id:
@@ -72,7 +72,7 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
                 match_pattern = re.search(r'taric_sa_pairs_(\d+)', file_path.name)
                 if match_pattern:
                     match_id = match_pattern.group(1)
-        
+            
         # Determine destination directory
         if by_date and by_match_id and match_id:
             dest_dir = output_dir / "by_date" / date_str / match_id
@@ -85,7 +85,7 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
         
         # Create destination directory
         dest_dir.mkdir(parents=True, exist_ok=True)
-        
+            
         # Add to move list
         dest_file = dest_dir / file_path.name
         if file_path != dest_file:
@@ -93,7 +93,7 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
     
     # Execute file moves
     for src, dest in file_moves:
-        try:
+                try:
             # Ensure directory exists
             dest.parent.mkdir(parents=True, exist_ok=True)
             
@@ -102,11 +102,11 @@ def organize_state_action_files(input_dir, output_dir=None, by_date=True, by_mat
                 shutil.copy2(src, dest)
                 
                 # Remove original if successful and we're organizing in place
-                if output_dir == input_dir:
+            if output_dir == input_dir:
                     src.unlink()
                 
                 logger.debug(f"Moved {src} to {dest}")
-                
+            
         except Exception as e:
             logger.error(f"Error moving {src} to {dest}: {e}")
     
@@ -131,7 +131,7 @@ def organize_metric_files(input_dir, output_dir=None, by_date=True, by_match_id=
     
     # Ensure Path objects
     input_dir = Path(input_dir)
-    output_dir = Path(output_dir)
+        output_dir = Path(output_dir)
     
     # Find all metric files
     metric_files = list(input_dir.glob("**/taric_metrics_*.json"))
@@ -166,7 +166,7 @@ def organize_metric_files(input_dir, output_dir=None, by_date=True, by_match_id=
                 match_pattern = re.search(r'taric_metrics_(\d+)', file_path.name)
                 if match_pattern:
                     match_id = match_pattern.group(1)
-        
+            
         # Determine destination directory
         if by_date and by_match_id and match_id:
             dest_dir = output_dir / "by_date" / date_str / match_id
@@ -179,7 +179,7 @@ def organize_metric_files(input_dir, output_dir=None, by_date=True, by_match_id=
         
         # Create destination directory
         dest_dir.mkdir(parents=True, exist_ok=True)
-        
+                
         # Add to move list
         dest_file = dest_dir / file_path.name
         if file_path != dest_file:
@@ -200,7 +200,7 @@ def organize_metric_files(input_dir, output_dir=None, by_date=True, by_match_id=
                     src.unlink()
                 
                 logger.debug(f"Moved {src} to {dest}")
-                
+            
         except Exception as e:
             logger.error(f"Error moving {src} to {dest}: {e}")
     

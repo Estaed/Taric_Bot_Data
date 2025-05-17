@@ -140,21 +140,21 @@ def calculate_healing_metrics(state_action_pairs, match_data=None):
             # Track target priority for this heal
             priority_healing = 0
             if isinstance(targets, list) and targets:
-                for target in targets:
+            for target in targets:
                     if not isinstance(target, dict):
                         continue
                     
-                    target_champion = target.get('champion', '').lower()
-                    target_priority = champion_class.get(target_champion, 'medium_priority')
-                    
-                    # Track healing by target priority
-                    if target_priority in metrics['healing_by_target_priority']:
-                        target_heal = heal_amount / num_targets if num_targets > 0 else 0
-                        metrics['healing_by_target_priority'][target_priority] += target_heal
-                    
-                    # Count as priority healing if high priority target
-                    if target_priority == 'high_priority':
-                        priority_healing += heal_amount / num_targets if num_targets > 0 else 0
+                target_champion = target.get('champion', '').lower()
+                target_priority = champion_class.get(target_champion, 'medium_priority')
+                
+                # Track healing by target priority
+                if target_priority in metrics['healing_by_target_priority']:
+                    target_heal = heal_amount / num_targets if num_targets > 0 else 0
+                    metrics['healing_by_target_priority'][target_priority] += target_heal
+                
+                # Count as priority healing if high priority target
+                if target_priority == 'high_priority':
+                    priority_healing += heal_amount / num_targets if num_targets > 0 else 0
             else:
                 # If targets not specified, assign default distribution
                 metrics['healing_by_target_priority']['medium_priority'] += heal_amount
@@ -199,16 +199,16 @@ def calculate_healing_metrics(state_action_pairs, match_data=None):
         
         low_health_allies = []
         if isinstance(nearby_allies, list):
-            for ally in nearby_allies:
+        for ally in nearby_allies:
                 if not isinstance(ally, dict):
                     continue
                     
-                if ally.get('health_percent', 1.0) < 0.6 and ally.get('is_in_q_range', False):
-                    low_health_allies.append({
-                        'champion': ally.get('champion', ''),
-                        'health_percent': ally.get('health_percent', 1.0),
-                        'priority': champion_class.get(ally.get('champion', '').lower(), 'medium_priority')
-                    })
+            if ally.get('health_percent', 1.0) < 0.6 and ally.get('is_in_q_range', False):
+                low_health_allies.append({
+                    'champion': ally.get('champion', ''),
+                    'health_percent': ally.get('health_percent', 1.0),
+                    'priority': champion_class.get(ally.get('champion', '').lower(), 'medium_priority')
+                })
         
         # If there are low health allies, count as a healing opportunity
         if low_health_allies:
@@ -648,7 +648,7 @@ def calculate_shield_metrics(state_action_pairs, match_data=None):
         
         # Estimate based on game progression (mid-game is typically more efficient than early game)
         game_progress_factor = 0.5
-        if total_game_time > 0:
+    if total_game_time > 0:
             # Assuming a typical game is 30 minutes, scale efficiency
             game_progress_factor = min(1.0, total_game_time / (30 * 60))
         
@@ -847,14 +847,14 @@ def calculate_stun_metrics(state_action_pairs, match_data=None):
                 
                 # Track stun target distribution
                 if isinstance(targets, list) and targets:
-                    for target in targets:
+                for target in targets:
                         if not isinstance(target, dict):
                             continue
                             
-                        target_id = target.get('id', 'unknown')
-                        if target_id not in metrics['stun_target_distribution']:
-                            metrics['stun_target_distribution'][target_id] = 0
-                        metrics['stun_target_distribution'][target_id] += 1
+                    target_id = target.get('id', 'unknown')
+                    if target_id not in metrics['stun_target_distribution']:
+                        metrics['stun_target_distribution'][target_id] = 0
+                    metrics['stun_target_distribution'][target_id] += 1
                 else:
                     # If no specific targets, add a generic entry
                     if 'unknown' not in metrics['stun_target_distribution']:
@@ -1098,7 +1098,7 @@ def calculate_damage_prevention_metrics(state_action_pairs, match_data=None):
         # Higher is better - around 0.5-0.7 is typically good
         metrics['prevention_efficiency'] = 0.6
     else:
-        metrics['prevention_efficiency'] = 0.5  # Default placeholder
+    metrics['prevention_efficiency'] = 0.5  # Default placeholder
     
     return metrics
 
@@ -1126,10 +1126,10 @@ def calculate_combat_metrics(state_action_pairs, match_data=None):
     
     # Calculate individual metrics with proper error handling
     try:
-        healing_metrics = calculate_healing_metrics(state_action_pairs, match_data)
-        shield_metrics = calculate_shield_metrics(state_action_pairs, match_data)
-        stun_metrics = calculate_stun_metrics(state_action_pairs, match_data)
-        damage_prevention_metrics = calculate_damage_prevention_metrics(state_action_pairs, match_data)
+    healing_metrics = calculate_healing_metrics(state_action_pairs, match_data)
+    shield_metrics = calculate_shield_metrics(state_action_pairs, match_data)
+    stun_metrics = calculate_stun_metrics(state_action_pairs, match_data)
+    damage_prevention_metrics = calculate_damage_prevention_metrics(state_action_pairs, match_data)
     except Exception as e:
         print(f"Error calculating combat metrics: {e}")
         healing_metrics = {}

@@ -411,7 +411,7 @@ def calculate_apm_metrics(state_action_pairs, match_data=None):
             metrics['ability_casts_per_minute'] = len(ability_casts) / total_minutes if total_minutes > 0 else 0
             metrics['movement_commands_per_minute'] = len(movement_commands) / total_minutes if total_minutes > 0 else 0
             metrics['target_selection_per_minute'] = len(target_selections) / total_minutes if total_minutes > 0 else 0
-            
+    
             # Calculate APM by phase
             phase_durations = {'early_game': 0, 'mid_game': 0, 'late_game': 0}
             phase_action_counts = {'early_game': 0, 'mid_game': 0, 'late_game': 0}
@@ -933,7 +933,7 @@ def calculate_item_ability_metrics(state_action_pairs, match_data=None):
                     'targets': action.get('targets', []),
                     'index': idx
                 })
-                
+        
                 # Specifically track ward placements
                 if item_name in ward_items or any(ward_term in str(item_name).upper() for ward_term in ['WARD', 'TRINKET', 'VISION']):
                     # Create a ward-specific entry in metrics
@@ -1125,7 +1125,7 @@ def calculate_mouse_click_metrics(state_action_pairs, match_data=None):
     
     # Initialize metrics
     metrics = {
-        'clicks_per_minute': 0,
+            'clicks_per_minute': 0,
         'clicks_per_action': 0,
         'click_accuracy': 0,
         'click_distribution': {},

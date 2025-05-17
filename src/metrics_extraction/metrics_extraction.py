@@ -71,15 +71,15 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
     logger.info(f"Processing file: {file_path}")
     
     try:
-        # Load state-action pair data
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Extract metadata and match data
-        metadata = data.get('metadata', {})
-        match_data = data.get('match_data', {})
-        state_action_pairs = data.get('state_action_pairs', [])
-        
+    # Load state-action pair data
+    with open(file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # Extract metadata and match data
+    metadata = data.get('metadata', {})
+    match_data = data.get('match_data', {})
+    state_action_pairs = data.get('state_action_pairs', [])
+    
         # Get match ID from filename for raw data lookup
         match_id = None
         filename = os.path.basename(file_path)
@@ -101,23 +101,23 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
                 except Exception as e:
                     logger.warning(f"Error loading raw match data: {e}")
         
-        # Calculate all metrics
+    # Calculate all metrics
         logger.info("Calculating combat metrics...")
-        combat_metrics = calculate_combat_metrics(state_action_pairs, match_data)
+    combat_metrics = calculate_combat_metrics(state_action_pairs, match_data)
         
         logger.info("Calculating vision metrics...")
-        vision_metrics = calculate_vision_metrics(state_action_pairs, match_data)
+    vision_metrics = calculate_vision_metrics(state_action_pairs, match_data)
         
         # Enhance vision metrics with raw data if available
         if raw_match_data:
             vision_metrics = enhance_vision_metrics(vision_metrics, raw_match_data)
         
         logger.info("Calculating positioning metrics...")
-        positioning_metrics = calculate_positioning_metrics(state_action_pairs, match_data)
+    positioning_metrics = calculate_positioning_metrics(state_action_pairs, match_data)
         
         logger.info("Calculating mechanics metrics...")
         try:
-            mechanics_metrics = calculate_mechanics_metrics(state_action_pairs, match_data)
+    mechanics_metrics = calculate_mechanics_metrics(state_action_pairs, match_data)
             # Enhance mechanics metrics with raw data if available
             if raw_match_data:
                 mechanics_metrics = enhance_mechanics_metrics(mechanics_metrics, raw_match_data)
@@ -126,21 +126,21 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
             mechanics_metrics = {}
         
         logger.info("Calculating game state metrics...")
-        game_state_metrics = calculate_game_state_metrics(state_action_pairs, match_data)
-        
-        # Combine all metrics
-        all_metrics = {
+    game_state_metrics = calculate_game_state_metrics(state_action_pairs, match_data)
+    
+    # Combine all metrics
+    all_metrics = {
             'match_id': match_id or 'unknown',
-            'metadata': metadata,
+        'metadata': metadata,
             'features': {
-                'combat': combat_metrics,
-                'vision': vision_metrics,
-                'positioning': positioning_metrics,
-                'mechanics': mechanics_metrics,
-                'game_state': game_state_metrics
-            }
+            'combat': combat_metrics,
+            'vision': vision_metrics,
+            'positioning': positioning_metrics,
+            'mechanics': mechanics_metrics,
+            'game_state': game_state_metrics
         }
-        
+    }
+    
         # If per_second format is requested, add time-series data
         if output_format == "per_second":
             all_metrics['time_series'] = extract_time_series_data(state_action_pairs)
@@ -156,8 +156,8 @@ def extract_metrics_from_file(file_path, validate_zeros=True, output_format="sum
                     if metrics:
                         logger.warning(f"  {category}: {', '.join(metrics)}")
         
-        return all_metrics
-        
+    return all_metrics
+
     except Exception as e:
         logger.error(f"Error processing {file_path}: {str(e)}")
         return None
@@ -363,8 +363,8 @@ def enhance_mechanics_metrics(mechanics_metrics, raw_match_data):
                     ability_usage['e_accuracy'] = 0.60 * kill_participation  # Estimate
                     ability_usage['r_accuracy'] = 0.80 * kill_participation  # Estimate
                     enhanced_metrics['ability_usage'] = ability_usage
-    
-    except Exception as e:
+            
+        except Exception as e:
         logger.warning(f"Error enhancing mechanics metrics: {e}")
     
     return enhanced_metrics
@@ -710,7 +710,7 @@ def process_all_files(input_dir, output_dir, batch_size=5, organize_files=False,
         organize_files (bool): Whether to organize output files
         validate_zeros (bool): Whether to validate metrics for suspicious zero values
         output_format (str): Format of the output - "summary" or "per_second"
-    
+        
     Returns:
         dict: Processing results with counts and summary
     """
@@ -741,7 +741,7 @@ def process_all_files(input_dir, output_dir, batch_size=5, organize_files=False,
         logger.info(f"Processing batch {i//batch_size + 1}/{(len(sa_files)-1)//batch_size + 1}")
         
         for file_path in tqdm(batch_files, desc=f"Batch {i//batch_size + 1}"):
-            total_processed += 1
+                total_processed += 1
             success = extract_metrics_to_file(file_path, output_dir, validate_zeros, output_format)
             if success:
                 total_success += 1
