@@ -37,7 +37,7 @@ def analyze_match(match_id):
         print(f"  {event_type}: {count} ({count/len(pairs)*100:.1f}%)")
     
     # Save processed pairs
-    output_dir = Path("data/features/state_action_pairs")
+    output_dir = Path("data/state_action_pairs")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     output_file = output_dir / f"taric_sa_pairs_per_second_{match_id}.json"

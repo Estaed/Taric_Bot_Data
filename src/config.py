@@ -19,14 +19,15 @@ NOTEBOOKS_DIR = PROJECT_ROOT / "notebooks"
 # Data subdirectories
 RAW_DATA_DIR = DATA_DIR / "raw" / "Estaed games"
 CLEANED_DATA_DIR = DATA_DIR / "cleaned"
-FEATURES_DIR = DATA_DIR / "features"
+STATE_ACTION_DIR = DATA_DIR / "state_action_pairs"
+METRICS_DIR = DATA_DIR / "metrics_data"
 
 # API settings
 RIOT_API_KEY = os.getenv("RIOT_API_KEY")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 # Ensure all directories exist
-for directory in [DATA_DIR, MODELS_DIR, NOTEBOOKS_DIR, RAW_DATA_DIR, CLEANED_DATA_DIR, FEATURES_DIR]:
+for directory in [DATA_DIR, MODELS_DIR, NOTEBOOKS_DIR, RAW_DATA_DIR, CLEANED_DATA_DIR, STATE_ACTION_DIR, METRICS_DIR]:
     directory.mkdir(exist_ok=True)
 
 # Validation

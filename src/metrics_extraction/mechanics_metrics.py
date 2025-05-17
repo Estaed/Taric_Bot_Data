@@ -20,6 +20,15 @@ def calculate_ability_sequence_metrics(state_action_pairs, match_data=None):
     Returns:
         dict: Dictionary of ability sequence metrics
     """
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
+        
     metrics = {
         'ability_usage_count': {
             'Q': 0,
@@ -71,8 +80,14 @@ def calculate_ability_sequence_metrics(state_action_pairs, match_data=None):
     
     # First pass: gather ability sequences and timing
     for pair in state_action_pairs:
+        if not isinstance(pair, dict):
+            continue
+            
+        if 'state' not in pair or not isinstance(pair['state'], dict):
+            continue
+            
         state = pair['state']
-        action = pair.get('action', {})
+        action = pair.get('action', {}) if isinstance(pair.get('action'), dict) else {}
         game_phase = state.get('game_phase', 'EARLY_GAME').lower()
         timestamp = state.get('game_time_seconds', 0)
         
@@ -120,22 +135,27 @@ def calculate_ability_sequence_metrics(state_action_pairs, match_data=None):
     if ability_sequence:
         unique_sequences = set()
         for i in range(len(ability_sequence) - 2):
+            if i < 0 or i+2 >= len(ability_sequence):  # Ensure valid indices
+                continue
             seq = tuple(ability_sequence[i:i+3])
             unique_sequences.add(seq)
         
         # Normalize by total possible sequences
-        sequence_complexity = len(unique_sequences) / (len(ability_sequence) - 2) if len(ability_sequence) > 2 else 0
+        total_possible = max(1, len(ability_sequence) - 2)  # Avoid division by zero
+        sequence_complexity = len(unique_sequences) / total_possible if total_possible > 0 else 0
         metrics['ability_sequence_complexity'] = sequence_complexity
     
     # Calculate timing consistency
     # Lower time gaps between abilities indicates better mechanics
     if len(ability_timing) >= 2:
         time_gaps = [ability_timing[i+1] - ability_timing[i] for i in range(len(ability_timing) - 1)]
-        avg_gap = sum(time_gaps) / len(time_gaps)
-        gap_variance = sum((gap - avg_gap) ** 2 for gap in time_gaps) / len(time_gaps)
-        
-        # Lower variance means more consistent timing
-        metrics['ability_timing_consistency'] = 1 / (1 + gap_variance)
+        if time_gaps:  # Ensure we have gaps to calculate
+            avg_gap = sum(time_gaps) / len(time_gaps)
+            gap_variance = sum((gap - avg_gap) ** 2 for gap in time_gaps) / len(time_gaps)
+            
+            # Lower variance means more consistent timing
+            # Add a small constant to avoid division by zero
+            metrics['ability_timing_consistency'] = 1 / (1 + gap_variance)
     
     # Special sequences for Taric
     q_aa_combos = 0
@@ -143,6 +163,9 @@ def calculate_ability_sequence_metrics(state_action_pairs, match_data=None):
     
     # Count special Taric combos
     for i in range(len(ability_sequence) - 1):
+        if i < 0 or i+1 >= len(ability_sequence):  # Ensure valid indices
+            continue
+            
         # Q -> AA combo (Q ability to reset auto attack)
         if ability_sequence[i] == 'Q' and ability_sequence[i+1] == 'AUTO':
             q_aa_combos += 1
@@ -154,7 +177,7 @@ def calculate_ability_sequence_metrics(state_action_pairs, match_data=None):
     # Calculate combo efficiency
     if total_actions > 0:
         # Higher values indicate better combo usage
-        metrics['ability_combo_efficiency'] = (q_aa_combos + e_w_combos) / (total_actions / 2)
+        metrics['ability_combo_efficiency'] = (q_aa_combos + e_w_combos) / max(1, (total_actions / 2))
     
     return metrics
 
@@ -170,6 +193,15 @@ def calculate_target_selection_metrics(state_action_pairs, match_data=None):
     Returns:
         dict: Dictionary of target selection metrics
     """
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
+        
     metrics = {
         'target_selection_distribution': {},
         'priority_target_focus': 0,
@@ -196,92 +228,90 @@ def calculate_target_selection_metrics(state_action_pairs, match_data=None):
     }
     
     for pair in state_action_pairs:
+        if not isinstance(pair, dict):
+            continue
+            
+        if 'state' not in pair or not isinstance(pair['state'], dict):
+            continue
+            
         state = pair['state']
-        action = pair.get('action', {})
-        ability = action.get('ability')
+        action = pair.get('action', {}) if isinstance(pair.get('action'), dict) else {}
         
-        # Process targeting information
-        target = action.get('target')
+        # Skip if no action or no targets
+        if not action:
+            continue
+            
+        # Get ability and targets
+        ability = action.get('ability')
         targets = action.get('targets', [])
         
-        # Single target abilities (W)
-        if target and ability in ['W']:
-            target_id = target.get('id', 'unknown')
+        # Skip if not a valid ability or no targets
+        if not ability or not isinstance(targets, list) or not targets:
+            continue
             
-            # Add to overall targets
-            all_targets.append(target_id)
+        for target in targets:
+            if not isinstance(target, dict):
+                continue
+                
+            target_type = target.get('type', 'unknown')
+            target_champion = target.get('champion', 'unknown')
             
-            # Add to ability-specific targets
-            ability_targets[ability].append(target_id)
+            # Add to distribution
+            target_key = f"{target_type}:{target_champion}"
+            if target_key not in metrics['target_selection_distribution']:
+                metrics['target_selection_distribution'][target_key] = 0
+            metrics['target_selection_distribution'][target_key] += 1
             
-            # Count as defensive targeting (W is always on allies)
-            defensive_targets += 1
+            # Track targets by ability
+            if ability in ability_targets and ability in metrics['target_selection_by_ability']:
+                if target_key not in metrics['target_selection_by_ability'][ability]:
+                    metrics['target_selection_by_ability'][ability][target_key] = 0
+                metrics['target_selection_by_ability'][ability][target_key] += 1
             
-            # Update target distribution
-            if target_id not in metrics['target_selection_distribution']:
-                metrics['target_selection_distribution'][target_id] = 0
-            metrics['target_selection_distribution'][target_id] += 1
+            # Add to all targets
+            all_targets.append(target_key)
             
-            # Update ability-specific distribution
-            if target_id not in metrics['target_selection_by_ability'][ability]:
-                metrics['target_selection_by_ability'][ability][target_id] = 0
-            metrics['target_selection_by_ability'][ability][target_id] += 1
-        
-        # Multi-target abilities (Q, E, R)
-        elif targets and ability in ['Q', 'E', 'R']:
-            for target in targets:
-                target_id = target.get('id', 'unknown')
-                
-                # Add to overall targets
-                all_targets.append(target_id)
-                
-                # Add to ability-specific targets
-                ability_targets[ability].append(target_id)
-                
-                # Count as defensive or offensive
-                if ability == 'Q' or ability == 'R':
-                    defensive_targets += 1
-                elif ability == 'E':
-                    offensive_targets += 1
-                
-                # Update target distribution
-                if target_id not in metrics['target_selection_distribution']:
-                    metrics['target_selection_distribution'][target_id] = 0
-                metrics['target_selection_distribution'][target_id] += 1
-                
-                # Update ability-specific distribution
-                if target_id not in metrics['target_selection_by_ability'][ability]:
-                    metrics['target_selection_by_ability'][ability][target_id] = 0
-                metrics['target_selection_by_ability'][ability][target_id] += 1
+            # Count offensive vs defensive targeting
+            if target_type == 'ally':
+                defensive_targets += 1
+            elif target_type == 'enemy':
+                offensive_targets += 1
     
     # Calculate target switching frequency
-    if len(all_targets) >= 2:
-        switches = sum(1 for i in range(len(all_targets) - 1) if all_targets[i] != all_targets[i+1])
+    if len(all_targets) > 1:
+        switches = sum(1 for i in range(1, len(all_targets)) if all_targets[i] != all_targets[i-1])
         metrics['target_switching_frequency'] = switches / (len(all_targets) - 1)
     
-    # Calculate offensive/defensive targeting percentages
-    total_targeted_actions = defensive_targets + offensive_targets
-    if total_targeted_actions > 0:
-        metrics['defensive_targeting_percentage'] = defensive_targets / total_targeted_actions
-        metrics['offensive_targeting_percentage'] = offensive_targets / total_targeted_actions
+    # Calculate offensive vs defensive targeting percentages
+    total_targets = defensive_targets + offensive_targets
+    if total_targets > 0:
+        metrics['defensive_targeting_percentage'] = defensive_targets / total_targets
+        metrics['offensive_targeting_percentage'] = offensive_targets / total_targets
     
     # Calculate priority target focus
-    # (how consistently high-value targets are focused)
-    if metrics['target_selection_distribution']:
-        # Get most targeted entities
-        sorted_targets = sorted(metrics['target_selection_distribution'].items(), key=lambda x: x[1], reverse=True)
-        if sorted_targets:
-            # What percentage of actions were on the top 2 targets?
-            top_targets_count = sum(count for _, count in sorted_targets[:2])
-            top_targets_percentage = top_targets_count / len(all_targets) if all_targets else 0
-            metrics['priority_target_focus'] = top_targets_percentage
+    # In this simplified version, we'll assume ADC and APC champions are priority targets
+    priority_champion_types = ['adc', 'apc', 'mage', 'marksman']
+    priority_targets = sum(
+        metrics['target_selection_distribution'].get(key, 0)
+        for key in metrics['target_selection_distribution']
+        if 'enemy' in key.lower() and any(pt in key.lower() for pt in priority_champion_types)
+    )
+    
+    total_enemy_targets = sum(
+        metrics['target_selection_distribution'].get(key, 0)
+        for key in metrics['target_selection_distribution']
+        if 'enemy' in key.lower()
+    )
+    
+    if total_enemy_targets > 0:
+        metrics['priority_target_focus'] = priority_targets / total_enemy_targets
     
     return metrics
 
 
 def calculate_apm_metrics(state_action_pairs, match_data=None):
     """
-    Calculate metrics related to Actions Per Minute (APM) and input patterns.
+    Calculate metrics related to actions per minute and input speed.
     
     Args:
         state_action_pairs (list): List of state-action pairs
@@ -290,107 +320,163 @@ def calculate_apm_metrics(state_action_pairs, match_data=None):
     Returns:
         dict: Dictionary of APM metrics
     """
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
+    
     metrics = {
         'actions_per_minute': 0,
+        'ability_casts_per_minute': 0,
+        'movement_commands_per_minute': 0,
+        'target_selection_per_minute': 0,
+        'peak_apm': 0,
         'apm_by_phase': {
             'early_game': 0,
             'mid_game': 0,
             'late_game': 0
         },
-        'apm_variance': 0,
-        'combat_apm': 0,
-        'non_combat_apm': 0,
-        'peak_apm': 0,
-        'mouse_movement_efficiency': 0
+        'apm_consistency': 0,
+        'input_sequence_efficiency': 0
     }
     
-    # Cannot directly measure mouse movements from state-action pairs
-    # but we can approximate APM and other metrics
+    # Track action counts and timestamps
+    all_actions = []
+    ability_casts = []
+    movement_commands = []
+    target_selections = []
     
-    total_game_time = 0
-    if state_action_pairs:
-        total_game_time = state_action_pairs[-1]['state']['game_time_seconds']
-    
-    # Count actions by phase and by minute
-    action_count = 0
-    actions_by_phase = {
-        'early_game': 0,
-        'mid_game': 0,
-        'late_game': 0
-    }
-    actions_by_minute = defaultdict(int)
-    combat_actions = 0
-    non_combat_actions = 0
-    
+    # First pass: gather action data
     for pair in state_action_pairs:
+        if not isinstance(pair, dict):
+            continue
+            
+        if 'state' not in pair or not isinstance(pair['state'], dict):
+            continue
+            
         state = pair['state']
-        action = pair.get('action', {})
-        game_phase = state.get('game_phase', 'EARLY_GAME').lower()
+        action = pair.get('action', {}) if isinstance(pair.get('action'), dict) else {}
         timestamp = state.get('game_time_seconds', 0)
-        minute = int(timestamp / 60)
+        game_phase = state.get('game_phase', 'early_game').lower()
         
-        if action.get('ability') or action.get('item_used') or action.get('movement'):
-            action_count += 1
+        # Count different action types
+        if action:
+            all_actions.append({
+                'timestamp': timestamp,
+                'phase': game_phase,
+                'type': action.get('type', 'unknown')
+            })
             
-            # Count by phase
-            if game_phase in actions_by_phase:
-                actions_by_phase[game_phase] += 1
+            # Count ability casts
+            if action.get('ability') in ['Q', 'W', 'E', 'R']:
+                ability_casts.append({
+                    'timestamp': timestamp,
+                    'phase': game_phase,
+                    'ability': action.get('ability')
+                })
             
-            # Count by minute
-            actions_by_minute[minute] += 1
+            # Count movement commands
+            if action.get('type') == 'movement' or action.get('movement'):
+                movement_commands.append({
+                    'timestamp': timestamp,
+                    'phase': game_phase
+                })
             
-            # Count combat vs non-combat
-            is_combat = False
-            if action.get('ability') in ['Q', 'W', 'E', 'R', 'AUTO']:
-                nearby_enemies = len(state.get('nearby_units', {}).get('enemies', []))
-                if nearby_enemies > 0:
-                    is_combat = True
+            # Count target selections
+            if action.get('targets') or action.get('target'):
+                target_selections.append({
+                    'timestamp': timestamp,
+                    'phase': game_phase
+                })
+    
+    # Calculate APM metrics
+    if state_action_pairs:
+        # Get total game time from last state-action pair
+        total_game_time = 0
+        for pair in reversed(state_action_pairs):
+            if isinstance(pair, dict) and 'state' in pair and isinstance(pair['state'], dict):
+                total_game_time = pair['state'].get('game_time_seconds', 0)
+                break
+        
+        if total_game_time > 0:
+            # Convert to minutes
+            total_minutes = total_game_time / 60
             
-            if is_combat:
-                combat_actions += 1
+            # Calculate overall APM
+            metrics['actions_per_minute'] = len(all_actions) / total_minutes if total_minutes > 0 else 0
+            metrics['ability_casts_per_minute'] = len(ability_casts) / total_minutes if total_minutes > 0 else 0
+            metrics['movement_commands_per_minute'] = len(movement_commands) / total_minutes if total_minutes > 0 else 0
+            metrics['target_selection_per_minute'] = len(target_selections) / total_minutes if total_minutes > 0 else 0
+            
+            # Calculate APM by phase
+            phase_durations = {'early_game': 0, 'mid_game': 0, 'late_game': 0}
+            phase_action_counts = {'early_game': 0, 'mid_game': 0, 'late_game': 0}
+            
+            # Count actions per phase
+            for action in all_actions:
+                phase = action.get('phase', 'early_game')
+                if phase in phase_action_counts:
+                    phase_action_counts[phase] += 1
+            
+            # Estimate phase durations 
+            # (This is a simplification - in real data you'd know precise phase times)
+            if total_game_time < 900:  # < 15 minutes
+                # Short game, early and mid only
+                phase_durations['early_game'] = min(600, total_game_time)  # First 10 minutes
+                phase_durations['mid_game'] = max(0, total_game_time - 600)  # Remainder
             else:
-                non_combat_actions += 1
+                # Normal game with all phases
+                phase_durations['early_game'] = 600  # First 10 minutes
+                phase_durations['mid_game'] = 900  # Next 15 minutes
+                phase_durations['late_game'] = max(0, total_game_time - 1500)  # Remainder
+            
+            # Calculate APM for each phase
+            for phase in phase_action_counts:
+                phase_minutes = phase_durations[phase] / 60
+                if phase_minutes > 0:
+                    metrics['apm_by_phase'][phase] = phase_action_counts[phase] / phase_minutes
+            
+            # Calculate peak APM (highest APM in any 1-minute window)
+            if len(all_actions) > 0:
+                # Group actions into 1-minute windows
+                window_actions = {}
+                for action in all_actions:
+                    minute = int(action['timestamp'] / 60)
+                    if minute not in window_actions:
+                        window_actions[minute] = 0
+                    window_actions[minute] += 1
+                
+                # Find peak
+                if window_actions:
+                    metrics['peak_apm'] = max(window_actions.values())
+            
+            # Calculate APM consistency (standard deviation of APM across 1-minute windows)
+            if window_actions:
+                window_apms = list(window_actions.values())
+                if window_apms:
+                    mean_apm = sum(window_apms) / len(window_apms)
+                    variance = sum((apm - mean_apm) ** 2 for apm in window_apms) / len(window_apms)
+                    std_dev = variance ** 0.5
+                    
+                    # Convert to a 0-1 score (lower std dev = higher consistency)
+                    metrics['apm_consistency'] = 1 / (1 + std_dev) if std_dev > 0 else 1
     
-    # Calculate overall APM
-    if total_game_time > 0:
-        total_minutes = total_game_time / 60
-        metrics['actions_per_minute'] = action_count / total_minutes if total_minutes > 0 else 0
-    
-    # Calculate APM by phase
-    phase_durations = {
-        'early_game': 0,
-        'mid_game': 0,
-        'late_game': 0
-    }
-    
-    for pair in state_action_pairs:
-        state = pair['state']
-        game_phase = state.get('game_phase', 'EARLY_GAME').lower()
-        if game_phase in phase_durations:
-            phase_durations[game_phase] += 1
-    
-    for phase in metrics['apm_by_phase']:
-        if phase_durations[phase] > 0:
-            phase_minutes = phase_durations[phase] / 60  # Convert from seconds to minutes
-            metrics['apm_by_phase'][phase] = actions_by_phase[phase] / phase_minutes if phase_minutes > 0 else 0
-    
-    # Calculate APM variance
-    if actions_by_minute:
-        apm_values = list(actions_by_minute.values())
-        avg_apm = sum(apm_values) / len(apm_values)
-        apm_variance = sum((apm - avg_apm) ** 2 for apm in apm_values) / len(apm_values)
-        metrics['apm_variance'] = apm_variance
-        metrics['peak_apm'] = max(apm_values)
-    
-    # Calculate combat vs non-combat APM
-    if total_game_time > 0:
-        total_minutes = total_game_time / 60
-        metrics['combat_apm'] = combat_actions / total_minutes if total_minutes > 0 else 0
-        metrics['non_combat_apm'] = non_combat_actions / total_minutes if total_minutes > 0 else 0
-    
-    # Mouse movement efficiency can't be directly calculated without more detailed data
-    # This is a placeholder for future implementation when more data is available
-    metrics['mouse_movement_efficiency'] = 0.75  # Placeholder value
+    # Calculate input sequence efficiency
+    # (Measures how well inputs are chained together without unnecessary actions)
+    # Simplified version: lower time between intentional actions = higher efficiency
+    if len(ability_casts) > 1:
+        ability_gaps = [ability_casts[i+1]['timestamp'] - ability_casts[i]['timestamp'] 
+                        for i in range(len(ability_casts) - 1)]
+        avg_gap = sum(ability_gaps) / len(ability_gaps) if ability_gaps else 0
+        
+        # Normalize: 0 = poor, 1 = excellent
+        # Assuming gaps of ~1-2 seconds are good, >5 seconds is suboptimal
+        if avg_gap > 0:
+            metrics['input_sequence_efficiency'] = min(1.0, 3.0 / avg_gap)
     
     return metrics
 
@@ -756,7 +842,14 @@ def calculate_item_ability_metrics(state_action_pairs, match_data=None):
         'item_efficiency_score': {},  # How effectively items are used
         'common_item_ability_sequences': [],
         'item_usage_in_combat': defaultdict(int),
-        'item_usage_out_of_combat': defaultdict(int)
+        'item_usage_out_of_combat': defaultdict(int),
+        'ward_usage_count': 0,
+        'ward_usage_by_phase': {
+            'early_game': 0,
+            'mid_game': 0,
+            'late_game': 0
+        },
+        'ward_types': {}
     }
     
     # Define relevant active items for Taric
@@ -775,7 +868,27 @@ def calculate_item_ability_metrics(state_action_pairs, match_data=None):
         'STEALTH_WARD',               # Vision
         'BLUE_TRINKET',               # Vision
         'HEALTH_POTION',              # Healing
-        'CORRUPTING_POTION'           # Healing + damage
+        'CORRUPTING_POTION',          # Healing + damage
+        # Add common ward variants
+        'WARD',                       # Common ward name
+        'TRINKET_WARD',               # Trinket ward
+        'YELLOW_TRINKET',             # Yellow trinket ward
+        'SIGHT_WARD',                 # Sight ward
+        'VISION_WARD',                # Vision ward
+        'FARSIGHT_ALTERATION',        # Blue trinket official name
+        'ORACLE_LENS',                # Red trinket
+        'SWEEPING_LENS',              # Red trinket variant
+        'ZOMBIE_WARD',                # Rune ward
+        'GHOST_PORO',                 # Rune vision
+        'WARD_TOTEM',                 # Ward totem
+    ]
+    
+    # Add a dedicated ward detection variable
+    ward_items = [
+        'CONTROL_WARD', 'STEALTH_WARD', 'WARD', 'TRINKET_WARD', 
+        'YELLOW_TRINKET', 'SIGHT_WARD', 'VISION_WARD', 'BLUE_TRINKET',
+        'FARSIGHT_ALTERATION', 'ORACLE_LENS', 'SWEEPING_LENS', 
+        'ZOMBIE_WARD', 'GHOST_PORO', 'WARD_TOTEM'
     ]
     
     # Track item usage and ability casts with timestamps
@@ -820,10 +933,74 @@ def calculate_item_ability_metrics(state_action_pairs, match_data=None):
                     'targets': action.get('targets', []),
                     'index': idx
                 })
+                
+                # Specifically track ward placements
+                if item_name in ward_items or any(ward_term in str(item_name).upper() for ward_term in ['WARD', 'TRINKET', 'VISION']):
+                    # Create a ward-specific entry in metrics
+                    if 'ward_usage_count' not in metrics:
+                        metrics['ward_usage_count'] = 0
+                        metrics['ward_usage_by_phase'] = {
+                            'early_game': 0,
+                            'mid_game': 0,
+                            'late_game': 0
+                        }
+                        metrics['ward_types'] = {}
+                    
+                    # Increment ward counters
+                    metrics['ward_usage_count'] += 1
+                    if game_phase in metrics['ward_usage_by_phase']:
+                        metrics['ward_usage_by_phase'][game_phase] += 1
+                    
+                    # Track ward type
+                    if item_name not in metrics['ward_types']:
+                        metrics['ward_types'][item_name] = 0
+                    metrics['ward_types'][item_name] += 1
         
+        # Also check for ward placement actions (might be recorded differently than item usage)
+        ward_action = False
+        if action.get('ability') == 'WARD' or action.get('action_type') == 'WARD_PLACEMENT':
+            ward_action = True
+        elif action.get('ability') in ['TRINKET', 'ITEM1', 'ITEM2', 'ITEM3', 'ITEM4', 'ITEM5', 'ITEM6'] and any(ward_term in str(action.get('item', '')).upper() for ward_term in ['WARD', 'TRINKET', 'VISION']):
+            ward_action = True
+        elif 'ward_placed' in action or 'place_ward' in action:
+            ward_action = True
+        elif action.get('type') == 'WARD_PLACED' or action.get('taric_action') == 'WARD_PLACED':
+            ward_action = True
+        # Also check the events array for ward placements
+        elif 'events' in pair:
+            events = pair.get('events', [])
+            for event in events:
+                if isinstance(event, dict) and (event.get('type') == 'WARD_PLACED' or event.get('taric_action') == 'WARD_PLACED'):
+                    ward_action = True
+                    break
+        
+        if ward_action:
+            # Initialize ward metrics if not already done
+            if 'ward_usage_count' not in metrics:
+                metrics['ward_usage_count'] = 0
+                metrics['ward_usage_by_phase'] = {
+                    'early_game': 0,
+                    'mid_game': 0,
+                    'late_game': 0
+                }
+                metrics['ward_types'] = {}
+            
+            # Get ward type (or use a default if unknown)
+            ward_type = action.get('item', 'UNKNOWN_WARD')
+            
+            # Increment ward counters
+            metrics['ward_usage_count'] += 1
+            if game_phase in metrics['ward_usage_by_phase']:
+                metrics['ward_usage_by_phase'][game_phase] += 1
+            
+            # Track ward type
+            if ward_type not in metrics['ward_types']:
+                metrics['ward_types'][ward_type] = 0
+            metrics['ward_types'][ward_type] += 1
+                
         # Track ability casts
         if 'ability' in action:
-            ability = action['ability']
+            ability = action.get('ability')
             if ability in ['Q', 'W', 'E', 'R']:
                 ability_casts.append({
                     'ability': ability,
@@ -928,492 +1105,219 @@ def calculate_item_ability_metrics(state_action_pairs, match_data=None):
 
 def calculate_mouse_click_metrics(state_action_pairs, match_data=None):
     """
-    Calculate metrics related to mouse click patterns (right-click vs left-click)
-    and click position analysis.
+    Calculate metrics related to mouse clicks from state-action pairs.
     
     Args:
         state_action_pairs (list): List of state-action pairs
         match_data (dict): Match-level data for context
         
     Returns:
-        dict: Dictionary of mouse click pattern metrics
+        dict: Dictionary of mouse click metrics
     """
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
+    
+    # Initialize metrics
     metrics = {
-        'click_counts': {
-            'right_click': 0,
-            'left_click': 0,
-            'ability_click': 0,
-            'item_click': 0
-        },
-        'click_ratios': {
-            'right_to_left_ratio': 0,
-            'ability_to_movement_ratio': 0
-        },
-        'click_patterns_by_phase': {
-            'early_game': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            },
-            'mid_game': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            },
-            'late_game': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            }
-        },
-        'click_patterns_by_context': {
-            'in_combat': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            },
-            'out_of_combat': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            },
-            'near_objective': {
-                'right_click': 0,
-                'left_click': 0,
-                'ability_click': 0,
-                'item_click': 0
-            }
-        },
-        'click_sequence_patterns': [],
-        'click_frequency': {
-            'clicks_per_minute': 0,
-            'right_clicks_per_minute': 0,
-            'left_clicks_per_minute': 0
-        },
-        'click_spatial_distribution': {
-            'self_centered': 0,
-            'target_centered': 0,
-            'exploratory': 0
-        },
-        'click_timing_metrics': {
-            'average_time_between_clicks': 0,
-            'click_burst_frequency': 0
-        },
-        'click_efficiency': 0,
-        # New positional metrics
-        'click_positions': {
-            'right_click_positions': [],  # List of (x,y) coordinates
-            'left_click_positions': [],   # List of (x,y) coordinates
-            'ability_click_positions': [], # List of (x,y) coordinates
-            'item_click_positions': []    # List of (x,y) coordinates
-        },
-        'click_position_metrics': {
-            'position_variance_x': 0,      # How spread out clicks are horizontally
-            'position_variance_y': 0,      # How spread out clicks are vertically
-            'click_position_entropy': 0,   # Measure of randomness in click positions
-            'consecutive_click_distance_avg': 0, # Average distance between consecutive clicks
-            'click_clusters': [],          # Centers of click clusters
-            'distance_from_champion_avg': 0, # Average distance from champion
-            'map_coverage_percentage': 0,   # Percentage of map covered by clicks
-            'position_heatmap': {}         # Grid-based heatmap of click density
-        }
+        'clicks_per_minute': 0,
+        'clicks_per_action': 0,
+        'click_accuracy': 0,
+        'click_distribution': {},
+        'avg_click_distance': 0,
+        'click_frequency_in_combat': 0,
+        'misclick_rate': 0
     }
     
-    # Counters for click analysis
-    click_timestamps = []
-    click_types = []
-    right_clicks = 0
-    left_clicks = 0
-    ability_clicks = 0
-    item_clicks = 0
+    # Count total clicks
+    total_clicks = 0
+    total_actions = 0
+    click_positions = []
+    click_targets = []
+    accurate_clicks = 0
+    combat_clicks = 0
+    combat_duration = 0
+    is_in_combat = False
     
-    # New position tracking
-    all_click_positions = []
-    right_click_positions = []
-    left_click_positions = []
-    ability_click_positions = []
-    item_click_positions = []
-    
-    # Phase-specific counters
-    phase_clicks = {
-        'early_game': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0},
-        'mid_game': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0},
-        'late_game': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0}
+    # For the click distribution map
+    map_regions = {
+        'ally_base': 0,
+        'enemy_base': 0,
+        'top_lane': 0,
+        'mid_lane': 0,
+        'bottom_lane': 0,
+        'ally_jungle': 0,
+        'enemy_jungle': 0,
+        'river': 0,
+        'other': 0
     }
     
-    # Context-specific counters
-    context_clicks = {
-        'in_combat': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0},
-        'out_of_combat': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0},
-        'near_objective': {'right_click': 0, 'left_click': 0, 'ability_click': 0, 'item_click': 0}
-    }
-    
-    total_game_time = 0
+    # Collect game time
+    game_time_seconds = 0
     if state_action_pairs:
-        total_game_time = state_action_pairs[-1]['state']['game_time_seconds']
+        last_pair = state_action_pairs[-1]
+        if isinstance(last_pair, dict) and 'state' in last_pair and isinstance(last_pair['state'], dict):
+            game_time_seconds = last_pair['state'].get('game_time_seconds', 0)
     
-    # Process all state-action pairs
+    # Process all clicks in state-action pairs
+    previous_position = None
+    
     for pair in state_action_pairs:
-        state = pair['state']
+        if not isinstance(pair, dict):
+            continue
+            
+        # Check validity of state and action
+        if 'state' not in pair or not isinstance(pair['state'], dict):
+            continue
+            
+        state = pair.get('state', {})
         action = pair.get('action', {})
-        game_phase = state.get('game_phase', 'early_game').lower()
-        timestamp = state.get('game_time_seconds', 0)
+        if not isinstance(action, dict):
+            action = {}
         
-        # Determine context
-        nearby_enemies = state.get('nearby_units', {}).get('enemies', [])
-        in_combat = len(nearby_enemies) > 0
-        context = 'in_combat' if in_combat else 'out_of_combat'
+        # Track if in combat
+        in_combat_now = state.get('in_combat', False)
+        if in_combat_now and not is_in_combat:
+            is_in_combat = True
+            combat_start_time = state.get('game_time_seconds', 0)
+        elif not in_combat_now and is_in_combat:
+            is_in_combat = False
+            combat_end_time = state.get('game_time_seconds', 0)
+            combat_duration += combat_end_time - combat_start_time
         
-        # Get Taric's position
-        taric_position = (
-            state.get('taric_state', {}).get('position_x', 0),
-            state.get('taric_state', {}).get('position_y', 0)
-        )
+        # Count actions
+        if action:
+            total_actions += 1
         
-        # Check for objective proximity (simplified approach)
-        near_objective = False
-        objective_positions = [
-            (9500, 4000),  # Dragon position
-            (5500, 10000)  # Baron position
-        ]
+        # Get click data
+        clicks = action.get('clicks', [])
         
-        for obj_pos in objective_positions:
-            distance = math.sqrt(
-                (taric_position[0] - obj_pos[0])**2 + 
-                (taric_position[1] - obj_pos[1])**2
-            )
-            if distance < 2000:  # If within 2000 units of an objective
-                near_objective = True
-                break
-        
-        if near_objective:
-            context = 'near_objective'
-        
-        # Track different click types
-        
-        # Movement actions (right clicks)
-        if action.get('movement'):
-            # Get click position for movement
-            click_position = None
-            if 'target_position' in action:
-                click_position = (
-                    action['target_position'].get('x', 0),
-                    action['target_position'].get('y', 0)
-                )
-            elif 'destination' in action:
-                click_position = (
-                    action['destination'].get('x', 0),
-                    action['destination'].get('y', 0)
-                )
+        # Handle the case where clicks is an integer instead of a list
+        if isinstance(clicks, int):
+            # If clicks is just a count, we can't get detailed metrics
+            total_clicks += clicks
+            if is_in_combat:
+                combat_clicks += clicks
+            continue
             
-            if click_position:
-                all_click_positions.append({
-                    'position': click_position,
-                    'type': 'right_click',
-                    'timestamp': timestamp,
-                    'distance_from_champion': math.sqrt(
-                        (click_position[0] - taric_position[0])**2 +
-                        (click_position[1] - taric_position[1])**2
-                    )
-                })
+        # Normal case where clicks is a list
+        if not isinstance(clicks, list):
+            clicks = []
+        
+        # Process each click
+        for click in clicks:
+            total_clicks += 1
+            
+            if is_in_combat:
+                combat_clicks += 1
+            
+            # Get click position
+            if isinstance(click, dict):
+                position = click.get('position')
+                target = click.get('target')
                 
-                right_click_positions.append(click_position)
-            
-            right_clicks += 1
-            click_timestamps.append(timestamp)
-            click_types.append('right_click')
-            
-            # Update phase metrics
-            if game_phase in phase_clicks:
-                phase_clicks[game_phase]['right_click'] += 1
-            
-            # Update context metrics
-            context_clicks[context]['right_click'] += 1
-        
-        # Ability usage (typically associated with left clicks/keyboard)
-        if action.get('ability'):
-            # Get click position for ability
-            click_position = None
-            
-            if 'target_position' in action:
-                click_position = (
-                    action['target_position'].get('x', 0),
-                    action['target_position'].get('y', 0)
-                )
-            elif action.get('targets'):
-                # Use first target's position
-                if action['targets'] and 'position' in action['targets'][0]:
-                    click_position = (
-                        action['targets'][0]['position'].get('x', 0),
-                        action['targets'][0]['position'].get('y', 0)
-                    )
-            elif action.get('target') and 'position' in action.get('target', {}):
-                click_position = (
-                    action['target']['position'].get('x', 0),
-                    action['target']['position'].get('y', 0)
-                )
-            
-            if click_position:
-                all_click_positions.append({
-                    'position': click_position,
-                    'type': 'ability_click',
-                    'ability': action.get('ability'),
-                    'timestamp': timestamp,
-                    'distance_from_champion': math.sqrt(
-                        (click_position[0] - taric_position[0])**2 +
-                        (click_position[1] - taric_position[1])**2
-                    )
-                })
+                if position:
+                    click_positions.append(position)
+                    
+                    # Calculate map region
+                    region = get_map_region(position)
+                    if region in map_regions:
+                        map_regions[region] += 1
                 
-                ability_click_positions.append(click_position)
-            
-            ability_clicks += 1
-            click_timestamps.append(timestamp)
-            click_types.append('ability_click')
-            
-            # Update phase metrics
-            if game_phase in phase_clicks:
-                phase_clicks[game_phase]['ability_click'] += 1
-            
-            # Update context metrics
-            context_clicks[context]['ability_click'] += 1
-            
-            # Targeting enemies with abilities typically requires left-clicks
-            if action.get('targets') or action.get('target'):
-                left_clicks += 1
+                if target:
+                    click_targets.append(target)
+                    accurate_clicks += 1
                 
-                # Update phase metrics
-                if game_phase in phase_clicks:
-                    phase_clicks[game_phase]['left_click'] += 1
+                # Check if we have a previous position to calculate distance
+                if previous_position and position:
+                    try:
+                        # Calculate Euclidean distance between clicks
+                        dx = position[0] - previous_position[0]
+                        dy = position[1] - previous_position[1]
+                        distance = (dx**2 + dy**2)**0.5
+                        metrics['avg_click_distance'] += distance
+                    except (IndexError, TypeError):
+                        pass
                 
-                # Update context metrics
-                context_clicks[context]['left_click'] += 1
-                
-                if click_position:
-                    left_click_positions.append(click_position)
-        
-        # Item usage (typically associated with left clicks)
-        if action.get('item_used'):
-            # Get click position for item
-            click_position = None
-            
-            if 'target_position' in action:
-                click_position = (
-                    action['target_position'].get('x', 0),
-                    action['target_position'].get('y', 0)
-                )
-            elif action.get('target') and 'position' in action.get('target', {}):
-                click_position = (
-                    action['target']['position'].get('x', 0),
-                    action['target']['position'].get('y', 0)
-                )
-            
-            if click_position:
-                all_click_positions.append({
-                    'position': click_position,
-                    'type': 'item_click',
-                    'item': action.get('item_used'),
-                    'timestamp': timestamp,
-                    'distance_from_champion': math.sqrt(
-                        (click_position[0] - taric_position[0])**2 +
-                        (click_position[1] - taric_position[1])**2
-                    )
-                })
-                
-                item_click_positions.append(click_position)
-            
-            item_clicks += 1
-            click_timestamps.append(timestamp)
-            click_types.append('item_click')
-            
-            # Update phase metrics
-            if game_phase in phase_clicks:
-                phase_clicks[game_phase]['item_click'] += 1
-            
-            # Update context metrics
-            context_clicks[context]['item_click'] += 1
-            
-            # Items with active effects typically require left-clicks
-            left_clicks += 1
-            
-            # Update phase metrics
-            if game_phase in phase_clicks:
-                phase_clicks[game_phase]['left_click'] += 1
-            
-            # Update context metrics
-            context_clicks[context]['left_click'] += 1
-            
-            if click_position and click_position not in left_click_positions:
-                left_click_positions.append(click_position)
+                previous_position = position
     
-    # Update click counts
-    metrics['click_counts']['right_click'] = right_clicks
-    metrics['click_counts']['left_click'] = left_clicks
-    metrics['click_counts']['ability_click'] = ability_clicks
-    metrics['click_counts']['item_click'] = item_clicks
+    # Calculate metrics
+    if game_time_seconds > 0:
+        # Convert to minutes
+        game_time_minutes = game_time_seconds / 60
+        if game_time_minutes > 0:
+            metrics['clicks_per_minute'] = total_clicks / game_time_minutes
     
-    # Update click ratios
-    total_clicks = right_clicks + left_clicks
+    if total_actions > 0:
+        metrics['clicks_per_action'] = total_clicks / total_actions
+    
     if total_clicks > 0:
-        metrics['click_ratios']['right_to_left_ratio'] = right_clicks / total_clicks
-    
-    total_action_clicks = ability_clicks + right_clicks
-    if total_action_clicks > 0:
-        metrics['click_ratios']['ability_to_movement_ratio'] = ability_clicks / total_action_clicks
-    
-    # Update phase-specific patterns
-    for phase in phase_clicks:
-        for click_type, count in phase_clicks[phase].items():
-            metrics['click_patterns_by_phase'][phase][click_type] = count
-    
-    # Update context-specific patterns
-    for context in context_clicks:
-        for click_type, count in context_clicks[context].items():
-            metrics['click_patterns_by_context'][context][click_type] = count
-    
-    # Calculate click frequency
-    total_minutes = total_game_time / 60 if total_game_time > 0 else 1
-    
-    metrics['click_frequency']['clicks_per_minute'] = total_clicks / total_minutes
-    metrics['click_frequency']['right_clicks_per_minute'] = right_clicks / total_minutes
-    metrics['click_frequency']['left_clicks_per_minute'] = left_clicks / total_minutes
-    
-    # Calculate timing metrics
-    if len(click_timestamps) >= 2:
-        time_between_clicks = [
-            click_timestamps[i+1] - click_timestamps[i]
-            for i in range(len(click_timestamps) - 1)
-        ]
-        avg_time = sum(time_between_clicks) / len(time_between_clicks)
-        metrics['click_timing_metrics']['average_time_between_clicks'] = avg_time
+        metrics['click_accuracy'] = accurate_clicks / total_clicks
         
-        # Count click bursts (clicks within 0.5 seconds of each other)
-        burst_count = sum(1 for time in time_between_clicks if time < 0.5)
-        metrics['click_timing_metrics']['click_burst_frequency'] = burst_count / len(time_between_clicks)
-    
-    # Calculate click sequence patterns
-    if len(click_types) >= 3:
-        sequence_counts = defaultdict(int)
+        # Normalize click distribution
+        total_region_clicks = sum(map_regions.values())
+        if total_region_clicks > 0:
+            metrics['click_distribution'] = {
+                region: count / total_region_clicks 
+                for region, count in map_regions.items()
+            }
         
-        for i in range(len(click_types) - 2):
-            seq = (click_types[i], click_types[i+1], click_types[i+2])
-            sequence_counts[seq] += 1
-        
-        # Get most common sequences
-        common_sequences = sorted(sequence_counts.items(), key=lambda x: x[1], reverse=True)
-        metrics['click_sequence_patterns'] = [
-            {'sequence': seq, 'count': count}
-            for seq, count in common_sequences[:5]  # Top 5 sequences
-        ]
+        # Calculate average click distance
+        if len(click_positions) > 1:
+            metrics['avg_click_distance'] = metrics['avg_click_distance'] / (len(click_positions) - 1)
     
-    # Estimate spatial distribution (based on context)
+    # Calculate combat click frequency
+    if combat_duration > 0:
+        metrics['click_frequency_in_combat'] = combat_clicks / (combat_duration / 60)  # per minute
+    
+    # Calculate misclick rate (clicks without targets)
     if total_clicks > 0:
-        # Self-centered: clicks during abilities targeting self
-        self_targeting = metrics['click_patterns_by_context']['out_of_combat']['ability_click']
-        # Target-centered: clicks during combat
-        target_targeting = metrics['click_patterns_by_context']['in_combat']['ability_click'] + metrics['click_patterns_by_context']['in_combat']['left_click']
-        # Exploratory: movement clicks not in combat
-        exploratory = metrics['click_patterns_by_context']['out_of_combat']['right_click']
-        
-        metrics['click_spatial_distribution']['self_centered'] = self_targeting / total_clicks
-        metrics['click_spatial_distribution']['target_centered'] = target_targeting / total_clicks
-        metrics['click_spatial_distribution']['exploratory'] = exploratory / total_clicks
-    
-    # Calculate click efficiency (ratio of effective actions to total clicks)
-    effective_actions = ability_clicks + item_clicks
-    if total_clicks > 0:
-        metrics['click_efficiency'] = effective_actions / total_clicks
-    
-    # Store click positions in metrics
-    metrics['click_positions']['right_click_positions'] = right_click_positions
-    metrics['click_positions']['left_click_positions'] = left_click_positions
-    metrics['click_positions']['ability_click_positions'] = ability_click_positions
-    metrics['click_positions']['item_click_positions'] = item_click_positions
-    
-    # Calculate position-based metrics
-    if all_click_positions:
-        # Extract x and y coordinates for variance calculation
-        x_coords = [pos['position'][0] for pos in all_click_positions]
-        y_coords = [pos['position'][1] for pos in all_click_positions]
-        
-        # Calculate variance in x and y coordinates
-        if x_coords:
-            avg_x = sum(x_coords) / len(x_coords)
-            metrics['click_position_metrics']['position_variance_x'] = sum((x - avg_x) ** 2 for x in x_coords) / len(x_coords)
-        
-        if y_coords:
-            avg_y = sum(y_coords) / len(y_coords)
-            metrics['click_position_metrics']['position_variance_y'] = sum((y - avg_y) ** 2 for y in y_coords) / len(y_coords)
-        
-        # Calculate average distance from champion
-        champion_distances = [pos['distance_from_champion'] for pos in all_click_positions]
-        metrics['click_position_metrics']['distance_from_champion_avg'] = sum(champion_distances) / len(champion_distances) if champion_distances else 0
-        
-        # Calculate consecutive click distances
-        if len(all_click_positions) >= 2:
-            consecutive_distances = []
-            for i in range(len(all_click_positions) - 1):
-                pos1 = all_click_positions[i]['position']
-                pos2 = all_click_positions[i+1]['position']
-                distance = math.sqrt((pos2[0] - pos1[0])**2 + (pos2[1] - pos1[1])**2)
-                consecutive_distances.append(distance)
-            
-            if consecutive_distances:
-                metrics['click_position_metrics']['consecutive_click_distance_avg'] = sum(consecutive_distances) / len(consecutive_distances)
-        
-        # Create a simplified heatmap using a grid
-        # Divide the map into a 10x10 grid for analysis
-        heatmap = defaultdict(int)
-        map_width = 15000  # Approximate Summoner's Rift width
-        map_height = 15000  # Approximate Summoner's Rift height
-        grid_size = 10
-        cell_width = map_width / grid_size
-        cell_height = map_height / grid_size
-        
-        for pos in all_click_positions:
-            x, y = pos['position']
-            grid_x = min(grid_size - 1, max(0, int(x / cell_width)))
-            grid_y = min(grid_size - 1, max(0, int(y / cell_height)))
-            grid_key = f"{grid_x},{grid_y}"
-            heatmap[grid_key] += 1
-        
-        metrics['click_position_metrics']['position_heatmap'] = dict(heatmap)
-        
-        # Calculate map coverage (percentage of grid cells with clicks)
-        total_cells = grid_size * grid_size
-        cells_with_clicks = len(heatmap)
-        metrics['click_position_metrics']['map_coverage_percentage'] = cells_with_clicks / total_cells if total_cells > 0 else 0
-        
-        # Basic clustering to find hotspots
-        # (In a real implementation, this would use K-means or DBSCAN for better clustering)
-        if heatmap:
-            # Find top 3 hotspots in the heatmap
-            top_clusters = sorted(heatmap.items(), key=lambda x: x[1], reverse=True)[:3]
-            for grid_key, count in top_clusters:
-                grid_x, grid_y = map(int, grid_key.split(','))
-                center_x = (grid_x + 0.5) * cell_width
-                center_y = (grid_y + 0.5) * cell_height
-                metrics['click_position_metrics']['click_clusters'].append({
-                    'center': (center_x, center_y),
-                    'count': count,
-                    'percentage': count / len(all_click_positions) if all_click_positions else 0
-                })
-        
-        # Calculate click position entropy (simplified version)
-        # Higher entropy means more randomness/spread out clicks
-        if heatmap:
-            total_clicks = sum(heatmap.values())
-            if total_clicks > 0:
-                probabilities = [count / total_clicks for count in heatmap.values()]
-                entropy = -sum(p * math.log(p) for p in probabilities if p > 0)
-                metrics['click_position_metrics']['click_position_entropy'] = entropy
+        metrics['misclick_rate'] = 1 - (len(click_targets) / total_clicks)
     
     return metrics
+    
+def get_map_region(position):
+    """
+    Determine the map region from a position.
+    
+    Args:
+        position (list): [x, y] coordinates
+        
+    Returns:
+        str: Map region
+    """
+    # Simple map region check based on position
+    # This is just a placeholder - a real implementation would use actual map regions
+    try:
+        x, y = position
+        
+        # Basic region mapping (assumes standard map coordinates)
+        # Coordinate assumptions: [0,0] is bottom-left, [15000,15000] is top-right
+        if x < 3000 and y < 3000:
+            return 'ally_base'
+        elif x > 12000 and y > 12000:
+            return 'enemy_base'
+        elif x < 5000 and y > 10000:
+            return 'top_lane'
+        elif 5000 <= x <= 10000 and 5000 <= y <= 10000:
+            return 'mid_lane'
+        elif x > 10000 and y < 5000:
+            return 'bottom_lane'
+        elif x < 7500 and y < 7500:
+            return 'ally_jungle'
+        elif x > 7500 and y > 7500:
+            return 'enemy_jungle'
+        elif (5000 <= x <= 10000 and (y < 5000 or y > 10000)) or ((x < 5000 or x > 10000) and 5000 <= y <= 10000):
+            return 'river'
+        else:
+            return 'other'
+    except (TypeError, IndexError):
+        return 'other'
 
 def calculate_auto_attack_reset_metrics(state_action_pairs, match_data=None):
     """
@@ -1782,25 +1686,90 @@ def calculate_mechanics_metrics(state_action_pairs, match_data=None):
     Returns:
         dict: Dictionary of mechanics metrics
     """
-    ability_sequence = calculate_ability_sequence_metrics(state_action_pairs, match_data)
-    target_selection = calculate_target_selection_metrics(state_action_pairs, match_data)
-    apm = calculate_apm_metrics(state_action_pairs, match_data)
-    interaction_timing = calculate_interaction_timing_metrics(state_action_pairs, match_data)
-    item_ability = calculate_item_ability_metrics(state_action_pairs, match_data)
-    mouse_click_patterns = calculate_mouse_click_metrics(state_action_pairs, match_data)
-    auto_attack_reset = calculate_auto_attack_reset_metrics(state_action_pairs, match_data)
-    camera_control = calculate_camera_control_metrics(state_action_pairs, match_data)
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
+    
+    # Calculate individual metrics with proper error handling
+    try:
+        ability_sequence = calculate_ability_sequence_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating ability sequence metrics: {str(e)}")
+        ability_sequence = {}
+        
+    try:
+        target_selection = calculate_target_selection_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating target selection metrics: {str(e)}")
+        target_selection = {}
+        
+    try:
+        apm = calculate_apm_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating APM metrics: {str(e)}")
+        apm = {}
+        
+    try:
+        interaction_timing = calculate_interaction_timing_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating interaction timing metrics: {str(e)}")
+        interaction_timing = {}
+        
+    try:
+        item_ability = calculate_item_ability_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating item ability metrics: {str(e)}")
+        item_ability = {}
+        
+    try:
+        mouse_click_patterns = calculate_mouse_click_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating mouse click metrics: {str(e)}")
+        mouse_click_patterns = {}
+        
+    try:
+        auto_attack_reset = calculate_auto_attack_reset_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating auto attack reset metrics: {str(e)}")
+        auto_attack_reset = {}
+        
+    try:
+        camera_control = calculate_camera_control_metrics(state_action_pairs, match_data)
+    except Exception as e:
+        print(f"Error calculating camera control metrics: {str(e)}")
+        camera_control = {}
     
     # Combine all metrics
-    mechanics_metrics = {
-        **ability_sequence,
-        **target_selection,
-        **apm,
-        **interaction_timing,
-        **item_ability,
-        **mouse_click_patterns,
-        **auto_attack_reset,
-        **camera_control
-    }
+    mechanics_metrics = {}
+    
+    # Add metrics from each category, ensuring they're dictionaries
+    if isinstance(ability_sequence, dict):
+        mechanics_metrics.update(ability_sequence)
+    
+    if isinstance(target_selection, dict):
+        mechanics_metrics.update(target_selection)
+    
+    if isinstance(apm, dict):
+        mechanics_metrics.update(apm)
+    
+    if isinstance(interaction_timing, dict):
+        mechanics_metrics.update(interaction_timing)
+    
+    if isinstance(item_ability, dict):
+        mechanics_metrics.update(item_ability)
+    
+    if isinstance(mouse_click_patterns, dict):
+        mechanics_metrics.update(mouse_click_patterns)
+    
+    if isinstance(auto_attack_reset, dict):
+        mechanics_metrics.update(auto_attack_reset)
+    
+    if isinstance(camera_control, dict):
+        mechanics_metrics.update(camera_control)
     
     return mechanics_metrics 

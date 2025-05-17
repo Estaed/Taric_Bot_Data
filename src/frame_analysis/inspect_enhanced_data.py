@@ -100,7 +100,7 @@ if __name__ == "__main__":
         filepath = sys.argv[1]
     else:
         # Find the most recent state-action pairs file
-        sa_pairs_dir = Path('data/features/state_action_pairs')
+        sa_pairs_dir = Path('data/state_action_pairs')
         files = list(sa_pairs_dir.glob('*.json'))
         if files:
             # Sort by modification time, newest first

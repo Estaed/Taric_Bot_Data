@@ -20,7 +20,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src.config import RAW_DATA_DIR, CLEANED_DATA_DIR, FEATURES_DIR
+from src.config import RAW_DATA_DIR, CLEANED_DATA_DIR, STATE_ACTION_DIR
 
 # Import enhanced data extraction capabilities
 from src.frame_analysis.enhanced_data_extraction import extract_enhanced_data
@@ -1411,7 +1411,7 @@ class FrameAnalyzer:
         
         try:
             # Create output directory if needed
-            output_dir = FEATURES_DIR / "state_action_pairs"
+            output_dir = STATE_ACTION_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Default output file

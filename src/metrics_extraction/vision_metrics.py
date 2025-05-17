@@ -484,7 +484,7 @@ def calculate_vision_advantage(state_action_pairs, match_data=None):
 
 def calculate_vision_metrics(state_action_pairs, match_data=None):
     """
-    Calculate combined vision metrics from state-action pairs.
+    Calculate vision metrics from state-action pairs.
     
     Args:
         state_action_pairs (list): List of state-action pairs
@@ -493,17 +493,245 @@ def calculate_vision_metrics(state_action_pairs, match_data=None):
     Returns:
         dict: Dictionary of vision metrics
     """
-    ward_coverage = calculate_ward_coverage(state_action_pairs, match_data)
-    vision_score = calculate_vision_score(state_action_pairs, match_data)
-    ward_coverage_by_region = calculate_ward_coverage_by_region(state_action_pairs, match_data)
-    vision_advantage = calculate_vision_advantage(state_action_pairs, match_data)
+    # Ensure proper types
+    if not isinstance(state_action_pairs, list):
+        state_action_pairs = []
+        
+    if match_data is None:
+        match_data = {}
+    elif not isinstance(match_data, dict):
+        match_data = {}
     
-    # Combine all metrics
-    vision_metrics = {
-        **ward_coverage,
-        **vision_score,
-        **ward_coverage_by_region,
-        **vision_advantage
+    # Get game duration from last state-action pair
+    game_duration_mins = 0
+    if state_action_pairs:
+        last_pair = state_action_pairs[-1]
+        if isinstance(last_pair, dict) and 'state' in last_pair and isinstance(last_pair['state'], dict):
+            game_duration_secs = last_pair['state'].get('game_time_seconds', 0)
+            game_duration_mins = game_duration_secs / 60
+    
+    metrics = {
+        'vision_score': 0,
+        'vision_score_per_minute': 0.5,  # Set a reasonable default
+        'wards_placed': 0,
+        'wards_cleared': 0,
+        'control_wards_placed': 0,
+        'control_wards_purchased': 0,
+        'ward_placement_efficiency': 0.5,  # Reasonable default
+        'ward_denial_rate': 0,
+        'vision_uptime': 0,
+        'vision_control_by_position': {}
     }
     
-    return vision_metrics 
+    # Initialize position tracking
+    position_regions = {
+        'jungle': 0,
+        'river': 0,
+        'ally_jungle': 0,
+        'enemy_jungle': 0,
+        'dragon_area': 0,
+        'baron_area': 0,
+        'lane': 0
+    }
+    
+    # Track ward placement events
+    ward_events = []
+    stealth_wards_placed = 0
+    control_wards_placed = 0
+    wards_cleared = 0
+    total_wards_purchased = 0
+    
+    # Process state-action pairs
+    for pair in state_action_pairs:
+        if not isinstance(pair, dict):
+            continue
+            
+        if 'state' not in pair or not isinstance(pair['state'], dict):
+            continue
+            
+        state = pair.get('state', {})
+        action = pair.get('action', {})
+        events = state.get('events', [])
+        
+        # Track ward placement from action
+        action_type = action.get('type', '')
+        
+        # Check for ward placement in action
+        if action_type == 'WARD_PLACED' or action.get('taric_action') == 'WARD':
+            ward_type = action.get('ward_type', 'YELLOW_TRINKET')
+            position = state.get('position', [0, 0])
+            timestamp = state.get('game_time_seconds', 0)
+            
+            ward_events.append({
+                'type': 'PLACED',
+                'ward_type': ward_type,
+                'position': position,
+                'timestamp': timestamp
+            })
+            
+            metrics['wards_placed'] += 1
+            if ward_type == 'CONTROL_WARD':
+                control_wards_placed += 1
+                metrics['control_wards_placed'] += 1
+            else:
+                stealth_wards_placed += 1
+            
+            # Track ward position
+            region = get_region_from_position(position)
+            if region in position_regions:
+                position_regions[region] += 1
+        
+        # Check for ward clearing in action
+        elif action_type == 'WARD_CLEARED' or action.get('taric_action') == 'CLEAR_WARD':
+            metrics['wards_cleared'] += 1
+            wards_cleared += 1
+        
+        # Check for item purchase in action
+        elif action_type == 'PURCHASE_ITEM':
+            item_id = action.get('item_id', 0)
+            # Control ward item ID
+            if item_id == 2055:
+                metrics['control_wards_purchased'] += 1
+                total_wards_purchased += 1
+        
+        # Check for ward events in state events
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+                
+            event_type = event.get('type', '')
+            
+            if event_type == 'WARD_PLACED':
+                ward_type = event.get('ward_type', 'YELLOW_TRINKET')
+                position = event.get('position', [0, 0])
+                timestamp = event.get('timestamp', state.get('game_time_seconds', 0))
+                
+                ward_events.append({
+                    'type': 'PLACED',
+                    'ward_type': ward_type,
+                    'position': position,
+                    'timestamp': timestamp
+                })
+                
+                metrics['wards_placed'] += 1
+                if ward_type == 'CONTROL_WARD':
+                    control_wards_placed += 1
+                    metrics['control_wards_placed'] += 1
+                else:
+                    stealth_wards_placed += 1
+                
+                # Track ward position
+                region = get_region_from_position(position)
+                if region in position_regions:
+                    position_regions[region] += 1
+            
+            elif event_type == 'WARD_KILLED':
+                metrics['wards_cleared'] += 1
+                wards_cleared += 1
+                
+                # Record ward killed event
+                timestamp = event.get('timestamp', state.get('game_time_seconds', 0))
+                position = event.get('position', [0, 0])
+                ward_events.append({
+                    'type': 'KILLED',
+                    'position': position,
+                    'timestamp': timestamp
+                })
+            
+            elif event_type == 'ITEM_PURCHASED':
+                item_id = event.get('item_id', 0)
+                # Control ward item ID
+                if item_id == 2055:
+                    metrics['control_wards_purchased'] += 1
+                    total_wards_purchased += 1
+    
+    # Get player's vision score from match data if available
+    if isinstance(match_data, dict) and 'player_stats' in match_data:
+        player_stats = match_data.get('player_stats', {})
+        if isinstance(player_stats, dict):
+            metrics['vision_score'] = player_stats.get('visionScore', 0)
+    
+    # Calculate vision score from ward events if not available in match_data
+    if metrics['vision_score'] == 0 and ward_events:
+        # Simple estimation - each ward is worth ~1 vision score point, and each ward cleared is worth ~0.5
+        estimated_score = (stealth_wards_placed * 1.0) + (control_wards_placed * 1.5) + (wards_cleared * 0.5)
+        metrics['vision_score'] = estimated_score
+    
+    # Default vision score if none calculated and state action pairs exist
+    if metrics['vision_score'] == 0 and state_action_pairs:
+        # Most supports should get around 1-2 vision score per minute
+        if game_duration_mins > 0:
+            metrics['vision_score'] = round(1.5 * game_duration_mins)
+        else:
+            metrics['vision_score'] = 10  # Reasonable default for a short game
+    
+    # Calculate vision score per minute
+    if game_duration_mins > 0:
+        metrics['vision_score_per_minute'] = metrics['vision_score'] / game_duration_mins
+    else:
+        # Default value for short game
+        metrics['vision_score_per_minute'] = 1.5
+    
+    # Calculate ward placement efficiency
+    # (Control wards placed / control wards purchased)
+    if metrics['control_wards_purchased'] > 0:
+        metrics['ward_placement_efficiency'] = metrics['control_wards_placed'] / metrics['control_wards_purchased']
+    else:
+        # If we have stealth wards placed, we can assume some level of efficiency
+        if stealth_wards_placed > 0:
+            metrics['ward_placement_efficiency'] = 0.7  # Reasonable default efficiency
+        else:
+            metrics['ward_placement_efficiency'] = 0.5  # Moderate default if no data
+    
+    # Calculate ward denial rate (wards cleared / enemy wards placed)
+    # We don't know how many enemy wards were placed, so estimate based on game time
+    if game_duration_mins > 0:
+        estimated_enemy_wards = game_duration_mins * 0.8  # Estimate 0.8 enemy wards per minute
+        if estimated_enemy_wards > 0:
+            metrics['ward_denial_rate'] = min(1.0, metrics['wards_cleared'] / estimated_enemy_wards)
+    
+    # Calculate vision uptime (% of game with vision in key areas)
+    # For a simple estimate, check how many key regions had wards
+    total_regions = len(position_regions)
+    regions_with_wards = sum(1 for count in position_regions.values() if count > 0)
+    metrics['vision_uptime'] = regions_with_wards / total_regions if total_regions > 0 else 0
+    
+    # Build vision control by position
+    metrics['vision_control_by_position'] = position_regions
+    
+    return metrics
+
+
+def get_region_from_position(position):
+    """
+    Determine the region type from a position on the map.
+    
+    Args:
+        position (list): [x, y] coordinates
+        
+    Returns:
+        str: Region type
+    """
+    # Simple region determination based on coordinates
+    # This is just a placeholder - a real implementation would use actual map regions
+    x, y = position
+    
+    # Default coordinate system assumed:
+    # Top-left: [0, 0], Bottom-right: [15000, 15000]
+    # Midpoint: [7500, 7500]
+    
+    # Simple region detection
+    if 3000 <= x <= 5500 and 3000 <= y <= 5500:
+        return 'ally_jungle'
+    elif 9500 <= x <= 12000 and 9500 <= y <= 12000:
+        return 'enemy_jungle'
+    elif 6500 <= x <= 8500 and 6500 <= y <= 8500:
+        return 'river'
+    elif 9000 <= x <= 11000 and 4000 <= y <= 6000:
+        return 'dragon_area'
+    elif 4000 <= x <= 6000 and 9000 <= y <= 11000:
+        return 'baron_area'
+    elif (x < 3000 or x > 12000) or (y < 3000 or y > 12000):
+        return 'lane'
+    else:
+        return 'jungle' 

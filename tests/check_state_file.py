@@ -77,7 +77,7 @@ if __name__ == "__main__":
         filepath = sys.argv[1]
     else:
         # Use the test file
-        filepath = "data/features/state_action_pairs/taric_sa_pairs_TEST_MATCH_20250515_193953.json"
+        filepath = "data/state_action_pairs/taric_sa_pairs_TEST_MATCH_20250515_193953.json"
     
     if not Path(filepath).exists():
         print(f"Error: File not found: {filepath}")

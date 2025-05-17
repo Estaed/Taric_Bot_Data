@@ -31,7 +31,7 @@ from src.frame_analysis.taric_scenarios import (
     GAME_PHASE_SCENARIOS,
     SPECIAL_MECHANICS_SCENARIOS
 )
-from src.config import RAW_DATA_DIR, CLEANED_DATA_DIR, FEATURES_DIR
+from src.config import RAW_DATA_DIR, CLEANED_DATA_DIR, STATE_ACTION_DIR
 
 def create_comprehensive_scenarios(analyzer):
     """
